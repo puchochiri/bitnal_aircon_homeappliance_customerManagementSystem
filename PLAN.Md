@@ -12,7 +12,8 @@
 | 서비스명 | Bitnal (비트날) — 가전·에어컨 유지보수 플랫폼 |
 | 대상 | 에어컨 세척·가전 수리 1인 및 소규모 업체 (전 세계) |
 | 형태 | PWA (앱스토어 없음, 웹 직접 배포) |
-| 언어 | 한국어·영어 (MVP), 일본어·중국어·스페인어·포르투갈어·힌디어·프랑스어·아랍어·터키어·독일어·베트남어 (순차 확장) |
+| 언어 | 한국어·영어 (MVP) → 일본어·베트남어·태국어·인도네시아어·말레이어·힌디어·프랑스어·독일어·스페인어·포르투갈어 (1차 순차) |
+| 1차 출시국 | 🇰🇷🇯🇵🇻🇳🇹🇭🇮🇩🇲🇲🇰🇭🇲🇾🇮🇳🇦🇺🇳🇿🇺🇸🇬🇧🇫🇷🇩🇪🇪🇸🇵🇹 (17개국) |
 | 배포 | Vercel + Cloudflare 도메인 |
 
 ---
@@ -956,14 +957,23 @@ Supabase
 ### 결제
 
 ```
-Paddle (권장) — MoR, 전 세계 VAT/세금 자동 처리
-또는 LemonSqueezy — 인디 개발자 친화적
-(Stripe는 직접 세금 신고 필요 → 글로벌 시 번거로움)
+Paddle (글로벌 기본) — MoR, 전 세계 VAT/세금 자동 처리
+  ⚠️ 인도 미지원 → 인도 사용자는 Razorpay로 분기
 
-토스페이먼츠 (한국 사용자 전용)
+토스페이먼츠 (한국 전용)
   — KakaoPay, NaverPay, Toss, 신용카드 지원
-  — 원화(KRW) 고정 가격 정책 적용 (₩5,500/월, ₩55,000/년)
-  — Paddle 웹훅과 별도로 토스 웹훅 처리 필요 (구독 상태 이중 관리)
+  — 원화(KRW) 고정 가격 (₩5,500/월, ₩55,000/년)
+  — Paddle 웹훅과 별도로 토스 웹훅 처리 필요
+
+Razorpay (인도 전용 — Phase 3 추가, 인도 MAU 100명 이상 시)
+  — UPI, NetBanking, Cards, Wallets 지원
+  — INR 가격 별도 설정 (PPP 기반: ~₹150/월 검토)
+  — Razorpay 웹훅 별도 처리 필요
+
+[결제 라우팅 로직]
+  country_code === 'KR' → 토스페이먼츠
+  country_code === 'IN' → Razorpay
+  그 외 전체              → Paddle
 ```
 
 ### 알림 발송 서비스
@@ -1011,6 +1021,37 @@ API 키 처리:
     → 향후 사용자별 rate limit 적용 가능
 ```
 
+### 다국어 폰트 처리 (1차 17개국)
+
+```
+폰트 전략: Google Fonts CDN + font-display: swap + 서브셋
+
+[언어별 폰트]
+  한국어(ko):       Noto Sans KR        — 서브셋 ~150KB
+  일본어(ja):       Noto Sans JP        — JIS Level 1 서브셋 ~300KB
+  베트남어(vi):     Noto Sans           — 라틴 확장, 기본 폰트로 커버 ~30KB
+  태국어(th):       Noto Sans Thai      — ~200KB
+  인도네시아어(id): Noto Sans           — 라틴 기반, 기본 폰트로 커버 ~30KB
+  말레이어(ms):     Noto Sans           — 라틴 기반 ~30KB
+  힌디어(hi):       Noto Sans Devanagari — ~800KB (무거움 — 서브셋 필수)
+  프랑스어(fr):     Noto Sans           — 라틴 확장 ~30KB
+  독일어(de):       Noto Sans           — 라틴 확장 ~30KB
+  스페인어(es):     Noto Sans           — 라틴 기반 ~30KB
+  포르투갈어(pt):   Noto Sans           — 라틴 기반 ~30KB
+  미얀마어(my):     Noto Sans Myanmar   — ~500KB (필요 시)
+  크메르어(km):     Noto Sans Khmer     — ~400KB (필요 시)
+
+[최적화 방법]
+  1. 현재 로케일 폰트만 <link rel="preload"> 로 우선 로드
+  2. font-display: swap → FOIT 방지 (텍스트 즉시 표시)
+  3. Next.js next/font 모듈로 자동 최적화
+  4. 힌디어·미얀마어·크메르어: 동적 임포트 (해당 언어 선택 시만 로드)
+
+[번들 영향]
+  영어·베트남어·인도네시아어·말레이어·유럽어 → 기본 Noto Sans 공유 (~30KB)
+  한국어·일본어·힌디어 → 별도 폰트 로드 (해당 로케일 사용자만 비용 부담)
+```
+
 ### 배포 & 인프라
 
 ```
@@ -1042,6 +1083,9 @@ users
   appliance_interests   text[]  DEFAULT '{}'
     -- 선택 종목: aircon / washer / fridge / boiler / purifier /
     --            air_purifier / dryer / dishwasher / stove / microwave / tv / other
+  timezone              text DEFAULT 'Asia/Seoul'
+    -- 온보딩 시 Intl.DateTimeFormat().resolvedOptions().timeZone 자동 감지
+    -- 예: 'Asia/Seoul', 'America/New_York', 'Europe/London', 'Asia/Kolkata'
   career_years          int     -- 경력 (온보딩 입력, 선택)
   onboarding_done       bool DEFAULT false
   created_at            timestamptz
@@ -1646,6 +1690,41 @@ db.version(1).stores({
 | 30일 사용 후 | "30일간 잘 사용하셨네요! 데이터를 안전하게 클라우드에 백업하세요" |
 | 폰 교체 안내 | "새 기기에서도 이어서 쓰려면 PRO로 클라우드 백업하세요" |
 
+### 지역별 가격 정책 (PPP 기반)
+
+> 구매력 평가(PPP) 적용 — 동일 가치의 서비스를 각국 소득 수준에 맞게 제공
+
+| 국가/지역 | 통화 | MVP 가격 | PPP 권장 가격 | 결제 수단 | 비고 |
+|-----------|------|---------|-------------|---------|------|
+| 🇰🇷 한국 | KRW | ₩5,500/월 | ₩5,500 | 토스페이먼츠 | 고정 |
+| 🇯🇵 일본 | JPY | ¥600/월 | ¥600 | Paddle | 고정 |
+| 🇺🇸 미국 | USD | $4/월 | $4–6 | Paddle | 향후 인상 검토 |
+| 🇦🇺 호주 | AUD | A$6/월 | A$6 | Paddle | 적절 |
+| 🇳🇿 뉴질랜드 | NZD | NZ$7/월 | NZ$7 | Paddle | 적절 |
+| 🇬🇧 영국 | GBP | £3.2/월 | £3.2 | Paddle | 적절 |
+| 🇫🇷🇩🇪🇪🇸🇵🇹 서유럽 | EUR | €4/월 | €4 | Paddle | 적절 |
+| 🇲🇾 말레이시아 | MYR | RM18/월 | RM18 | Paddle | 적절 |
+| 🇻🇳 베트남 | VND | ~92,000₫/월 | ~50,000₫ ($2) | Paddle | ⚠️ PPP 고려 |
+| 🇹🇭 태국 | THB | ~140฿/월 | ~80฿ ($2.3) | Paddle | ⚠️ PPP 고려 |
+| 🇮🇩 인도네시아 | IDR | ~62,000Rp/월 | ~30,000Rp ($2) | Paddle | ⚠️ PPP 고려 |
+| 🇮🇳 인도 | INR | ~330₹/월 | ~150₹ ($1.8) | Razorpay | ⚠️ 별도 설정 필요 |
+| 🇲🇲 미얀마 | MMK | — | $2 (USD) | Paddle | 결제 인프라 미비 |
+| 🇰🇭 캄보디아 | USD | $2/월 | $2 | Paddle | 달러 통용 |
+
+```
+[MVP 가격 전략]
+  1단계: Paddle 단일 가격 $4/월로 출시
+  2단계: 동남아·인도 사용자 이탈률 모니터링 (3개월)
+  3단계: 이탈률 높으면 Paddle "Localized Pricing" 기능 활성화
+         → Paddle이 자동으로 국가별 PPP 환율 적용 (Paddle 기능 내장)
+  4단계: 인도 Razorpay → ₹150/월 별도 설정
+
+[Paddle Localized Pricing]
+  Paddle 대시보드에서 국가별 가격 오버라이드 설정 가능
+  → 추가 개발 없이 국가별 차등 가격 적용 가능
+  → $4 기준 동남아 $2로 오버라이드 → 전환율 개선 기대
+```
+
 ### 수익 시뮬레이션
 
 > ⚠️ 랭크 무료 PRO 사용자 (전문가 이상) 비율 가정:  
@@ -1742,9 +1821,10 @@ db.version(1).stores({
 - [ ] Supabase Auth (이메일 + Google OAuth)
 - [ ] 이메일 인증 플로우 (Supabase 내장)
 - [ ] FREE 가입 → 커뮤니티 쓰기 권한
-- [ ] Paddle 결제 연동 (PRO 구독 — 글로벌)
+- [ ] Paddle 결제 연동 (PRO 구독 — 글로벌, 인도 제외)
 - [ ] 토스페이먼츠 결제 연동 (PRO 구독 — 한국, ₩5,500/월)
 - [ ] 결제 웹훅 처리 (Paddle + 토스 이중 관리, users.tier 업데이트)
+- [ ] Razorpay 연동 (인도 전용 — 인도 MAU 100명 이상 시, INR 가격 별도 설정)
 - [ ] SMS 크레딧 추가 충전 흐름 (Paddle/Toss로 단건 결제)
 - [ ] 로컬→클라우드 마이그레이션 플로우
 - [ ] 멀티기기 동기화 (Supabase Realtime)
@@ -1824,10 +1904,14 @@ db.version(1).stores({
 - [ ] Sentry 에러 추적
 - [ ] PostHog 사용자 분석
 - [ ] 베타 사용자 모집
-- [ ] 다국어 순차 확장 (우선순위 순)
-  - 1차: 일본어(ja), 중국어 간체(zh-CN), 스페인어(es)
-  - 2차: 포르투갈어(pt), 베트남어(vi), 힌디어(hi)
-  - 3차: 프랑스어(fr), 아랍어(ar), 터키어(tr), 독일어(de)
+- [ ] 다국어 순차 확장 (1차 17개국 기준)
+  - MVP: 한국어(ko), 영어(en)
+  - 1단계: 일본어(ja), 베트남어(vi)                          ← 동북아·동남아 집중
+  - 2단계: 태국어(th), 인도네시아어(id), 말레이어(ms)         ← 동남아 나머지
+  - 3단계: 힌디어(hi), 프랑스어(fr), 독일어(de)              ← 인도·유럽 서부
+  - 4단계: 스페인어(es), 포르투갈어(pt)                      ← 유럽 + 남미 확장 기반
+  - 필요 시: 미얀마어(my), 크메르어(km)                      ← 수요 확인 후
+  - ※ 중국어·아랍어·터키어는 1차 대상국 아님 → 2차 확장 시 검토
 - [ ] 업종 확장 (보일러, 정수기, 가스레인지, 세탁기)
 
 ---
@@ -2053,6 +2137,35 @@ hreflang 자동 생성:
 | Naver Search Advisor | 네이버 검색 최적화 |
 | Bing Webmaster Tools | ChatGPT Search 연동 인덱싱 |
 | Ahrefs / Semrush (선택) | 키워드 순위·경쟁사 분석 |
+
+### 10-6. 1차 17개국 지역별 SEO 전략
+
+| 지역 | 주요 검색엔진 | 핵심 키워드 (예시) | 특이사항 |
+|------|-------------|------------------|---------|
+| 🇰🇷 한국 | Google 35%, Naver 60% | "에어컨 세척 앱" "기사 고객관리" | Naver 블로그·지식iN 병행 필수 |
+| 🇯🇵 일본 | Google 75%, Yahoo JP 20% | "エアコン清掃 管理アプリ" "業者 顧客管理" | Yahoo Japan 등록 고려 |
+| 🇺🇸 미국 | Google 90%, Bing 5% | "HVAC technician app" "AC maintenance software" | Product Hunt·G2 백링크 효과 큼 |
+| 🇦🇺🇳🇿 오세아니아 | Google 94% | "air conditioning service app" "HVAC management" | 미국 영어 키워드와 공유 가능 |
+| 🇬🇧 영국 | Google 92% | "air conditioning engineer app" "appliance repair software" | 영국식 영어 철자 주의 (licence, colour) |
+| 🇫🇷 프랑스 | Google 93% | "application technicien climatisation" "gestion clients CVC" | 프랑스어 키워드 별도 필요 |
+| 🇩🇪 독일 | Google 90%, Bing 5% | "Klimaanlagen App Techniker" "Kundenverwaltung Handwerk" | 독일어 키워드 별도 필요 |
+| 🇪🇸 스페인 | Google 95% | "app técnico aire acondicionado" "gestión clientes HVAC" | 스페인 + 남미 키워드 공통 활용 |
+| 🇵🇹 포르투갈 | Google 95% | "app técnico ar condicionado" "gestão clientes" | 포르투갈 + 브라질 키워드 공통 |
+| 🇻🇳 베트남 | Google 98% | "ứng dụng quản lý điều hòa" "app thợ sửa điều hòa" | Facebook이 실제 유입 채널로 더 효과적 |
+| 🇹🇭 태국 | Google 97% | "แอปช่างแอร์" "ระบบจัดการลูกค้า HVAC" | LINE OA 마케팅 병행 |
+| 🇮🇩 인도네시아 | Google 96% | "aplikasi teknisi AC" "manajemen pelanggan AC" | Facebook·WhatsApp 유입 비중 큼 |
+| 🇲🇾 말레이시아 | Google 96% | "app technician aircond" "customer management HVAC" | 영어·말레이어 혼용 키워드 |
+| 🇮🇳 인도 | Google 97% | "AC technician app India" "air conditioner repair management" | 힌디어·영어 이중 키워드 |
+| 🇲🇲🇰🇭 미얀마·캄보디아 | Google 95%+ | 영어 키워드 + 현지어 | 검색 유입보다 커뮤니티 유입 위주 |
+
+```
+[공통 전략]
+  - hreflang 태그 자동 생성 → 각국 Google에서 해당 언어 페이지 인덱싱
+  - 기종DB 페이지(오류코드)가 최강 SEO 자산
+    → "삼성 에어컨 E1 오류" / "Samsung AC E1 error fix" / "エアコン E1 エラー" 등
+    → 기종별·국가별 롱테일 검색 독점 전략
+  - 국가별 Google Search Console 계정 → 국가 타겟팅 설정
+```
 
 ---
 
@@ -2280,6 +2393,118 @@ hreflang 자동 생성:
 
 ---
 
+### 11-8. 1차 17개국 지역별 초기 진입 전략
+
+#### 한국 (§11-1~11-7 기존 전략 참고)
+```
+네이버 블로그·지식iN + 카카오 오픈채팅 + Product Hunt
+→ 기존 §11-3~11-5 전략 그대로 적용
+```
+
+#### 일본
+```
+진입 채널:
+  - Twitter(X) — 일본 에어컨 기사 커뮤니티 활발
+  - YouTube 에어컨 세척 채널 협업 (일본어 채널 TOP 5 섭외)
+  - Yahoo! Japan 지식iN 유사 서비스 "Yahoo!知恵袋" 답변 활동
+  - Qiita (기술 블로그) — PWA 앱 소개 기사
+
+키워드 앰배서더:
+  일본어 가능 에어컨 기사 5~10명 사전 섭외
+  → PRO 1년 무료 제공, 일본 Twitter·YouTube 채널 동시 홍보
+```
+
+#### 미국
+```
+진입 채널:
+  - Product Hunt 론칭 (§11-5 전략 동일)
+  - Reddit: r/HVAC, r/appliancerepair, r/smallbusiness
+  - Facebook Groups: "HVAC Technician Business", "AC Repair Professionals US"
+  - LinkedIn: HVAC 업계 그룹 + 콘텐츠 마케팅
+  - G2·Capterra·AlternativeTo 등록 (§11-4 전략 동일)
+
+차별화 메시지:
+  "The FREE alternative to Housecall Pro and JobNimbus"
+  → 고가 경쟁 SaaS($99/월) 대비 무료 시작 강조
+```
+
+#### 호주 · 뉴질랜드
+```
+진입 채널:
+  - Facebook Groups: "HVAC Australia", "Air Conditioning Technicians AU/NZ"
+  - Gumtree (호주 지역 광고 플랫폼) — 비즈니스 카테고리 등록
+  - LinkedIn 오세아니아 HVAC 그룹
+  - 미국 Product Hunt 론칭과 동시 노출 (영어권 공유)
+
+타이밍:
+  호주 에어컨 시즌: 11월~3월 (남반구 여름)
+  → 한국 출시(5월)와 시즌 다름 — 별도 호주 타이밍 캠페인 필요
+```
+
+#### 인도
+```
+진입 채널:
+  - Facebook Groups: "AC Technician India", "HVAC Engineers India"
+  - WhatsApp Business 그룹 (기존 기사 커뮤니티 직접 접근)
+  - YouTube 힌디어 에어컨 수리 채널 협업
+  - LinkedIn India — B2B SaaS 커뮤니티
+  - Razorpay 파트너 디렉토리 등록
+
+차별화 메시지:
+  "Free app for AC technicians — ₹150/month PRO" (PPP 가격)
+  → 경쟁사 없는 블루오션 강조
+
+주의:
+  WhatsApp이 인도 최강 채널 → WhatsApp Business 계정 필수
+```
+
+#### 동남아시아 (베트남·태국·인도네시아·말레이시아)
+```
+공통 채널:
+  Facebook Groups — 동남아 전역 에어컨 기사 커뮤니티 활발
+  예: "AC Technician Vietnam", "ช่างแอร์ไทย", "Teknisi AC Indonesia"
+
+베트남:
+  - Zalo (베트남 최대 메신저) 그룹 마케팅
+  - Facebook: "Thợ điều hòa Việt Nam" 그룹
+  - YouTube 베트남어 에어컨 채널 협업
+
+태국:
+  - LINE OA (태국 LINE 보급률 높음) 채널 개설
+  - Facebook: "ช่างแอร์มืออาชีพ" 그룹
+
+인도네시아:
+  - WhatsApp Business 그룹 마케팅
+  - Facebook: "Teknisi AC Profesional Indonesia"
+  - Tokopedia·Bukalapak 비즈니스 프로필 (디렉토리)
+
+말레이시아:
+  - Facebook: "Technician Aircond Malaysia"
+  - WhatsApp 커뮤니티
+  - 영어 통용 → 미국·호주 콘텐츠 부분 재활용 가능
+
+타이밍:
+  동남아 전역 연중 더움 → 시즌 무관 출시 가능
+  단, 라마단 기간(3~4월) 이후 → 에어컨 수요 피크 (4~6월)
+```
+
+#### 미얀마 · 캄보디아
+```
+특수 상황:
+  - 인터넷 불안정 → 오프라인 기능 강조 마케팅
+  - Facebook이 실질적 인터넷 역할 (Facebook Zero 정책)
+
+진입 채널:
+  - Facebook Groups: 미얀마·캄보디아 에어컨 기사 그룹
+  - 오프라인 기능 강조: "인터넷 없어도 고객 관리 가능"
+  - 무료 버전 강조: 유료 서비스 부담 큼
+
+가격:
+  $2/월 (Paddle) → 동남아 평균보다 낮게 설정 고려
+```
+
+---
+
 ## 12. 서비스 신뢰 & 데이터 보호 정책
 
 ### 12-1. 데이터 분실 방지 (FREE 사용자 공략 포인트)
@@ -2318,7 +2543,45 @@ CSV 내보내기 1클릭 제공 (FREE도 가능):
 | 환불 정책 | 14일 이내 100% 환불, 이후 비례 환불 |
 | 계정 삭제 정책 | 설정 화면에서 삭제 신청 → 30일 유예 → 전체 데이터 삭제 (GDPR Article 17 대응) |
 
-### 12-4. 보안 신뢰 표시 (랜딩 페이지)
+### 12-4. 1차 17개국 개인정보 보호법 대응
+
+| 국가 | 법제 | 핵심 요구사항 | 대응 방법 | 출시 전 필수 |
+|------|------|--------------|----------|------------|
+| 🇰🇷 한국 | 개인정보보호법 | 개인정보처리방침(한국어), 수탁사 공개, 열람·삭제·정정 요청 | ✅ 기존 구현 | ✅ |
+| 🇺🇸 미국(CA) | CCPA | 개인정보 판매 거부 옵션, "Do Not Sell My Info" 링크 | 캘리포니아 IP 감지 시 표시 | ✅ |
+| 🇬🇧🇫🇷🇩🇪🇪🇸🇵🇹 EU/UK | GDPR | 쿠키 동의, 데이터 이식권·삭제권(Art.17·20), SCC | 쿠키 배너 + 삭제 API + Frankfurt 리전 | ✅ |
+| 🇯🇵 일본 | 개인정보보호법(APPI) | 제3자 제공 동의, 외국 이전 고지 | 개인정보처리방침 일본어 섹션 추가 | ✅ |
+| 🇦🇺 호주 | Privacy Act 1988 | APPs(Australian Privacy Principles), 국외 이전 고지 | 개인정보처리방침 호주 섹션 | ⚠️ 필요 |
+| 🇳🇿 뉴질랜드 | Privacy Act 2020 | 개인정보 수집·보유·접근권 | 호주와 유사, 동일 문서로 커버 가능 | ⚠️ 필요 |
+| 🇮🇳 인도 | DPDP Act 2023 | 동의 명시, 데이터 삭제 요청, 데이터 수탁자 등록 | 개인정보처리방침 인도 섹션, Razorpay 연동 시 준수 | ⚠️ 필요 |
+| 🇻🇳 베트남 | Decree 13/2023 | 개인정보 처리 동의, 데이터 보존 기간 제한 | 개인정보처리방침 베트남어 섹션 | ⚠️ 필요 |
+| 🇹🇭 태국 | PDPA 2019 | 동의 관리, 데이터 국외 이전 신고, DPO 지정(대규모 시) | 개인정보처리방침 태국어 섹션 + 쿠키 동의 | ⚠️ 필요 |
+| 🇮🇩 인도네시아 | PDP Law 2022 | 개인정보 처리 동의, 데이터 삭제 요청 | 개인정보처리방침 인도네시아어 섹션 | ⚠️ 필요 |
+| 🇲🇾 말레이시아 | PDPA 2010 | 데이터 품질·보안 조치, 국외 이전 제한 | 개인정보처리방침 말레이어 섹션 | ⚠️ 필요 |
+| 🇲🇲 미얀마 | 법제 미성숙 | 강제 규정 없음 | 기본 개인정보처리방침 적용 | 낮음 |
+| 🇰🇭 캄보디아 | 법제 미성숙 | 강제 규정 없음 | 기본 개인정보처리방침 적용 | 낮음 |
+
+```
+[MVP 출시 전 필수 완료]
+  □ 개인정보처리방침 — 한국어 + 영어 (2개국 공용)
+  □ GDPR 쿠키 동의 배너 (EU/UK 접속 감지 시 자동 표시)
+  □ 계정 삭제 API (GDPR Art.17 대응)
+  □ 개인정보 내보내기 (GDPR Art.20 대응)
+  □ CCPA "Do Not Sell My Info" 링크 (캘리포니아 IP 감지 시)
+
+[Phase 2~3 (각 지역 출시 전)]
+  □ 일본어 개인정보처리방침 섹션 (일본 출시 전)
+  □ 호주·뉴질랜드 섹션 (영어, Privacy Act 기준)
+  □ 인도 섹션 (DPDP Act 기준, Razorpay 연동 전)
+  □ 동남아 섹션 (베트남·태국·인도네시아·말레이시아)
+
+[공통 전략]
+  단일 다국어 개인정보처리방침 페이지 구성:
+  /legal/privacy → 언어 탭으로 국가별 섹션 전환
+  (각 섹션에 해당 국가법 명시, 번역은 Gemini API 초안 후 검토)
+```
+
+### 12-5. 보안 신뢰 표시 (랜딩 페이지)
 
 ```
 ✅ SSL/TLS 암호화 (HTTPS 필수)
@@ -2582,6 +2845,9 @@ jobs:
   TOSS_SECRET_KEY                   토스페이먼츠 시크릿 키 (서버 전용)
   RESEND_API_KEY                    이메일 발송 키
   COOLSMS_API_KEY / TWILIO_SID      SMS 발송 키
+  RAZORPAY_KEY_ID                   Razorpay 공개 키 (인도 결제, Phase 3 추가)
+  RAZORPAY_KEY_SECRET               Razorpay 시크릿 키 (서버 전용)
+  RAZORPAY_WEBHOOK_SECRET           Razorpay 웹훅 서명 검증
 
 ⚠️ 규칙:
   - NEXT_PUBLIC_ 접두사 없는 키 → 클라이언트에 절대 노출 안 됨
@@ -2717,9 +2983,9 @@ develop → main PR 승인 + 머지 → Vercel 자동 Production 배포
 
 ---
 
-## 18. 글로벌 200개국 동시 배포 — 기술 리스크 & 대응 전략
+## 18. 글로벌 배포 기술 리스크 & 대응 전략 (1차 17개국 → 단계적 확장)
 
-> 전 세계 동시 오픈 시 발생하는 14개 카테고리 기술 문제와 우선순위별 대응 방안
+> 1차 17개국 동시 출시 시 발생하는 기술 문제와 우선순위별 대응 방안
 
 ---
 
@@ -3422,10 +3688,60 @@ Step 4: 근본 원인 파악은 복구 후에
   → 광고 시스템 (PRO 500명 이전)
 
 절대 만들지 말아야 하는 것 (지금 단계):
-  → 200개국 동시 지원 인프라 (사용자 없을 때)
-  → 중국 시장 대응 (ICP 허가 12~18개월 소요)
+  → 200개국 동시 지원 인프라 (1차 7개국 안정화 이후 단계적 확장)
+  → 중국 시장 대응 (ICP 허가 12~18개월 소요 — 별도 프로젝트)
   → Razorpay / Stripe 추가 (Paddle으로 충분할 때까지)
   → 광고 타겟팅 알고리즘 고도화
+
+[1차 출시 대상국 — 17개국 집중]
+
+동북아시아:
+  🇰🇷 한국        — 에어컨 시장 성숙, 초기 사용자 기반
+  🇯🇵 일본        — 에어컨 보급률 높음, 기술 친화적 소규모 업체 많음
+
+동남아시아 (더운 기후 → 에어컨 필수):
+  🇻🇳 베트남      — 에어컨 보급 급성장, 소규모 수리 업체 밀집
+  🇹🇭 태국        — 연중 더위, 에어컨 의존도 높음, 관광 호텔 수요
+  🇮🇩 인도네시아  — 동남아 최대 인구, 에어컨 시장 급성장
+  🇲🇲 미얀마      — 신흥 에어컨 시장, 경쟁 서비스 부재
+  🇰🇭 캄보디아    — 소규모 에어컨 수리 업체 성장 중
+  🇲🇾 말레이시아  — 에어컨 보급률 높음, 영어 통용 (서비스 진입 용이)
+
+남아시아:
+  🇮🇳 인도        — 세계 최대 에어컨 성장 시장, 1억+ 에어컨 보급 예정
+                    결제: Razorpay 추가 필요 (Paddle 인도 미지원)
+
+오세아니아:
+  🇦🇺 호주        — 영어권, 에어컨 필수 (더운 기후), 선진국 수준 서비스 요금
+  🇳🇿 뉴질랜드    — 영어권, 호주와 동일 언어·문화권 (추가 비용 거의 없음)
+
+북미:
+  🇺🇸 미국        — 세계 최대 영어권 시장, HVAC 업체 수 세계 1위
+                    결제: Paddle 완전 지원, 달러 과금
+
+서유럽:
+  🇬🇧 영국        — 영어권, 가전 수리 업체 많음, Paddle 완전 지원
+  🇫🇷 프랑스      — 에어컨 수요 증가, 유럽 교두보
+  🇩🇪 독일        — 가전 수리 문화 강함, 유럽 최대 시장
+  🇪🇸 스페인      — 더운 기후, 에어컨 필수, 스페인어로 남미 확장 기반
+  🇵🇹 포르투갈    — 포르투갈어로 브라질 시장 진입 기반
+
+[언어 커버리지 — 1차 17개국]
+  한국어(ko), 일본어(ja), 영어(en), 베트남어(vi), 태국어(th),
+  인도네시아어(id), 말레이어(ms), 힌디어(hi),
+  프랑스어(fr), 독일어(de), 스페인어(es), 포르투갈어(pt)
+  → 미얀마어(my), 크메르어(km): MVP는 영어 표시, 수요 확인 후 번역 추가
+  → 뉴질랜드·호주·미국·영국·말레이시아: 영어 단일 커버
+
+[인도 결제 주의사항]
+  Paddle이 인도를 미지원하므로 인도 사용자 결제 시 Razorpay 연동 필요
+  → Phase 3에서 Paddle 먼저 출시, 인도 MAU 100명 이상이면 Razorpay 추가
+
+[2차 확장 — 1차 안정화 후]
+  스페인어 기반 → 멕시코·콜롬비아·아르헨티나 등 남미
+  포르투갈어 기반 → 브라질 (세계 3위 에어컨 시장)
+  영어 기반     → 캐나다·싱가포르
+  아랍어 기반   → 사우디·UAE·이집트 (RTL 대응 필요)
 
 [개발 리듬]
   집중 개발: 2주 스프린트 (기능 완성 목표)
@@ -3447,17 +3763,19 @@ Step 4: 근본 원인 파악은 복구 후에
 | Phase | 건너뛰어도 되는 것 | 이유 |
 |-------|-------------------|------|
 | Phase 1 | 모노레포 (Next.js + Vite 분리) | 단일 Next.js 앱으로 시작 |
-| Phase 1 | 12개 언어 지원 | 한국어·영어 2개로 시작 |
+| Phase 1 | 1차 17개국 외 언어 지원 | MVP는 한국어·영어 2개로 시작, Phase 2에서 일본어·베트남어·태국어·인도네시아어·말레이어·힌디어·프랑스어·독일어·스페인어·포르투갈어 순차 추가 |
 | Phase 1 | E2E 테스트 전 기능 | 고객 등록·조회 핵심 흐름만 |
-| Phase 2 | RTL(아랍어) 지원 | 아랍어 사용자 생기면 추가 |
-| Phase 3 | Toss 결제 | Paddle 단독 먼저 출시 |
-| Phase 3 | 멀티 리전 Supabase | 한국 사용자 기준 Tokyo 단일 |
-| Phase 4 | WhatsApp / LINE 채널 | 이메일+SMS 먼저, 요청 오면 추가 |
+| Phase 2 | RTL(아랍어) 지원 | 1차 대상국 아님, 2차 확장 시 추가 |
+| Phase 3 | Toss 결제 | Paddle 단독 먼저 출시, 한국 사용자 증가 후 추가 |
+| Phase 3 | 멀티 리전 Supabase | 초기 Tokyo 단일 (한국·일본·동남아·호주·뉴질랜드·인도 커버) → 유럽·미국 사용자 200명 이후 Frankfurt·us-east-1 추가 |
+| Phase 4 | WhatsApp / LINE 채널 | 이메일+SMS 먼저, 일본·태국 사용자 요청 시 LINE, 유럽 사용자 요청 시 WhatsApp |
 | Phase 4 | 랭크 시스템 | 커뮤니티 MAU 500명 이후 |
 | Phase 4 | Chrome Built-in AI | Gemini API 단일 경로로 충분 |
 | Phase 5 | 광고 시스템 전체 | PRO 구독자 500명 이후 |
-| 전체 | 중국 시장 대응 | 별도 프로젝트 수준, 나중에 |
-| 전체 | GDPR 완전 구현 | 최소: 개인정보처리방침 + 삭제 API |
+| 전체 | 중국 시장 대응 | 별도 프로젝트 수준 (ICP 허가 필요), 별도 판단 |
+| 전체 | GDPR 완전 구현 | 최소: 개인정보처리방침 + 삭제 API (영국·프랑스·독일·스페인·포르투갈 출시 전 완료 필수) |
+| 전체 | 인도 Razorpay | 인도 MAU 100명 이상 될 때 연동 (Paddle 인도 미지원) |
+| 전체 | 1차 17개국 외 시장 | 스페인어→남미, 포르투갈어→브라질, 영어→캐나다·싱가포르, 아랍어→중동 순으로 단계적 확장 |
 
 ---
 
@@ -3684,4 +4002,4 @@ CLAUDE.md (또는 .cursorrules):
 
 ---
 
-*최종 업데이트: 2026-05-21 (5차 리뷰 — 1인 개발자 편의성 개선 가이드 §19 추가, AI 개발 안전망 §19-10 추가)*
+*최종 업데이트: 2026-05-21 (6차 리뷰 — 1차 17개국 기준 전면 정합, Razorpay 추가, 지역별 SEO·홍보·가격 정책·개인정보법 섹션 신설)*
