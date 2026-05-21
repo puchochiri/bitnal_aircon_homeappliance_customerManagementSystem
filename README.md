@@ -230,8 +230,8 @@ Stripe 외에 고려할 옵션:
 
 | 서비스 | 특징 | 추천 케이스 |
 |---|---|---|
-| **Stripe** | 가장 표준, API 좋음 | 미국/유럽 중심 |
 | **Paddle** | Merchant of Record (세금 자동) | 글로벌 + 세금 신경 안 쓰고 싶을 때 |
+| **Stripe** | 가장 표준, API 좋음 | 미국/유럽 중심 |
 | **LemonSqueezy** | MoR, 사용 쉬움 | 인디 개발자에게 인기 |
 
 **Paddle/LemonSqueezy의 강점**: 사장님 대신 전 세계 VAT/세금을 처리해줘요. Stripe는 사장님이 직접 세금 신고해야 합니다. 1인 창업자에겐 Paddle/LemonSqueezy가 더 편할 수 있어요.
