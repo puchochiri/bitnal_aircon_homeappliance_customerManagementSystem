@@ -1683,8 +1683,10 @@ db.version(1).stores({
 
 ## 9. 개발 로드맵
 
-### Phase 1 — 로컬 MVP (4주)
+### Phase 1 — 로컬 MVP (6~8주, 1인 기준)
 **목표**: 1인 사업자가 바로 쓸 수 있는 완성품
+> ⚠️ 1인 개발 기준 현실적 기간 — 처음 계획의 "4주"는 팀 기준. 하루 4~6시간 투입 시 6~8주 산정.
+> **이 Phase에서 커뮤니티·SEO·알림 기능은 넣지 않는다** — 핵심 CRM만 완성한다.
 
 - [ ] 프로젝트 셋업 (Vite + React + TypeScript + Tailwind + shadcn)
 - [ ] PWA 설정 (vite-plugin-pwa + Service Worker + manifest)
@@ -1707,8 +1709,9 @@ db.version(1).stores({
 - [ ] 상단 필터 바 (내 종목 / 종목별 태그 / 전체 보기 토글)
 - [ ] 한국어 UI
 
-### Phase 2 — 커뮤니티 & 기종DB (3주)
+### Phase 2 — 커뮤니티 & 기종DB (4~6주, 1인 기준)
 **목표**: 전 세계 사용자가 방문하는 콘텐츠 허브
+> ⚠️ Next.js 앱 신규 구축이 포함됨 — 모노레포 환경 구성 시간 별도 산정 필요
 
 - [ ] Supabase 프로젝트 셋업 (커뮤니티/기종DB용)
 - [ ] 기종 DB 페이지 (비회원 공개)
@@ -1732,8 +1735,9 @@ db.version(1).stores({
 - [ ] Google Search Console + Naver Search Advisor + Bing Webmaster 등록
 - [ ] Core Web Vitals 목표치 달성 (LCP < 2.5s, CLS < 0.1)
 
-### Phase 3 — 인증 & 유료화 (3주)
+### Phase 3 — 인증 & 유료화 (4~5주, 1인 기준)
 **목표**: 구독 수익 창출
+> ⚠️ Paddle + Toss 이중 결제 연동은 각각 1주 이상 소요 — 한국 사용자 없으면 Paddle 단독 먼저 출시 권장
 
 - [ ] Supabase Auth (이메일 + Google OAuth)
 - [ ] 이메일 인증 플로우 (Supabase 내장)
@@ -1749,9 +1753,17 @@ db.version(1).stores({
 - [ ] 구독 관리 화면
 - [ ] 계정 삭제 기능 (GDPR — 전체 데이터 삭제 또는 익명화)
 
-### Phase 4 — AI 어시스턴트 & 고객 알림 & 랭크 시스템 (5~6주)
+### Phase 4 — AI 어시스턴트 & 고객 알림 & 랭크 시스템 (8~12주, 1인 기준)
 **목표**: 업주 업무 자동화 + 고객 재방문율 향상
-> ⚠️ 작업량이 많아 Phase 4a(AI+알림 3주) / Phase 4b(랭크+지원게시판 2~3주)로 분리 권장
+> ⚠️ 1인 기준 이 Phase가 가장 위험 구간.  
+> **반드시 4a / 4b / 4c 3단계로 분리 실행할 것** — 한 번에 묶으면 번아웃 발생.
+>
+> **Phase 4a** — AI 기능 (알림 문자 초안·메모 요약·견적 문구) + Gemini 폴백  
+> **Phase 4b** — 고객 알림 (이메일·SMS 2채널만 먼저, 카카오·WhatsApp·LINE은 4c로)  
+> **Phase 4c** — 랭크 시스템 + 지원 게시판 + 나머지 알림 채널
+>
+> **1인 알림 채널 우선순위:** 이메일(Resend) → SMS(Coolsms) → 카카오 → WhatsApp → LINE  
+> 사용자 요청이 없으면 카카오 이후는 건너뛰어도 됨.
 
 - [ ] Chrome Built-in AI (window.ai) 연동
 - [ ] Gemini API 무료 티어 폴백 구현
@@ -1781,8 +1793,10 @@ db.version(1).stores({
 - [ ] 일괄 홍보 발송 (지역·필터·수동 선택 + AI 개인화 문구)
 - [ ] 발송 이력·통계 화면
 
-### Phase 5 — 광고 시스템 (2주)
+### Phase 5 — 광고 시스템 (3~4주, 1인 기준)
 **목표**: 광고 수익 창출
+> ⚠️ 광고 시스템은 PRO 구독자 500명 이상이 될 때까지 건너뛰어도 됨.  
+> 광고주 없이 개발하면 유지보수 부담만 늘어남 — 수요 확인 후 구현.
 
 - [ ] 광고주 회원가입 + 심사 플로우
 - [ ] 광고 캠페인 등록 (이미지/URL/타겟팅)
@@ -2438,9 +2452,18 @@ main          ← 운영 서버 (Production) — 직접 push 금지
 ```
 
 **규칙:**
-- `feature/*` → `develop` : PR 필수 (코드 리뷰 1명 이상)
+- `feature/*` → `develop` : PR 생성 + CI 통과 (1인 개발이므로 셀프 머지 허용, 아래 체크리스트로 대체)
 - `develop` → `main` : PR 필수 + CI 전체 통과 + 스테이징 확인 완료 후 병합
 - `main` 직접 push 금지 — branch protection rule 설정
+
+> **1인 개발 PR 셀프 리뷰 체크리스트** (코드 리뷰어가 없을 때 대체)
+> ```
+> □ diff를 24시간 뒤에 다시 읽어봤는가? (신선한 눈으로)
+> □ 새 환경변수가 생겼으면 .env.local.example 업데이트했는가?
+> □ DB 스키마 변경이면 마이그레이션 파일 포함했는가?
+> □ 테스트가 없는 새 함수가 있는가?
+> □ TODO/FIXME 주석을 이슈로 옮겼는가?
+> ```
 
 ---
 
@@ -3180,4 +3203,485 @@ P2 (출시 3개월 내)
 
 ---
 
-*최종 업데이트: 2026-05-21 (4차 리뷰 — 글로벌 200개국 동시 배포 기술 리스크 분석 추가)*
+---
+
+## 19. 1인 개발자 개발·운영 가이드
+
+> 혼자서 개발하고 혼자서 유지보수할 때 생기는 실제 문제들과 대응 방법
+
+---
+
+### 19-1. 아키텍처 단순화 원칙
+
+#### 모노레포(Next.js + Vite 분리) — 시작 시점 주의
+
+```
+현재 계획: Phase 1부터 두 앱 분리 (apps/web + apps/app)
+문제: 모노레포 설정(pnpm workspace, tsconfig 경로, shared 패키지) 초기 비용 큼
+      두 앱의 빌드 파이프라인을 각각 관리해야 함
+
+1인 개발 권장:
+  Phase 1~2: Next.js 단일 앱으로 시작
+    ├─ /app/** → CSR (useEffect, no SSR) — 인증 필요 영역
+    └─ /models, /community, / → SSR/SSG
+  
+  Phase 3 이후: MAU 1,000명 넘으면 Vite 앱 분리 고려
+  (성능 최적화가 실제로 필요해지면 그때 분리)
+
+이점:
+  - 빌드 명령 하나 (next build)
+  - 환경변수 파일 하나
+  - Vercel 프로젝트 하나
+  - 의존성 충돌 없음
+```
+
+#### Chrome Built-in AI — 단순화
+
+```
+현재 계획: Chrome Built-in AI (window.ai) 1순위, Gemini API 2순위
+문제:
+  - Chrome 127+ 에서만 동작 (iOS Safari, Firefox, Edge 미지원)
+  - window.ai API는 아직 Origin Trial 단계 → 언제든 스펙 변경 가능
+  - "지원되면 쓰고 아니면 폴백" 분기 로직이 코드 복잡도 올림
+
+1인 개발 권장:
+  Gemini API (Edge Function 프록시) 단일 경로로 단순화
+  Chrome Built-in AI는 Phase 6 이후 선택적으로 추가
+  
+  코드 분기 제거 → 유지보수 포인트 감소
+```
+
+#### Supabase 멀티 리전 — 출시 후 판단
+
+```
+현재 계획: P0 수준으로 출시 전 구성 권장
+실제:
+  - MVP 사용자는 대부분 한국에서 시작
+  - 글로벌 사용자가 실제로 생기면 그때 리전 추가
+  - 지금 설정하면 $100~200/월 비용이 사용자 1명일 때부터 나감
+
+권장:
+  출시 시: Supabase 단일 리전 (ap-northeast-1 Tokyo — 한국 최적)
+  한국 외 MAU 200명 넘으면: 해당 리전 Read Replica 추가
+```
+
+---
+
+### 19-2. 1인 개발 브랜치 & 배포 전략 (단순화)
+
+```
+팀 프로세스 → 1인 현실 프로세스
+
+[팀 방식]
+  feature/* → develop (PR + 코드리뷰) → main (PR + 스테이징)
+
+[1인 방식]
+  main ← 운영 서버 (직접 push 금지)
+    └─ dev ← 개발 기본 브랜치 (Staging 자동 배포)
+         └─ feat/xxx, fix/xxx — 단기 작업
+
+규칙:
+  - feat/xxx는 완성되면 dev에 바로 머지 (PR은 CI 통과 용도)
+  - dev → main 은 주 1회 또는 마일스톤 완료 시
+  - 작은 수정(오타, 스타일)은 dev에 직접 커밋 허용
+
+셀프 PR 체크리스트 (GitHub PR Description 템플릿):
+  ## 변경 내용
+  - 
+  ## 테스트 방법
+  - [ ] 로컬에서 확인함
+  - [ ] Staging에서 확인함
+  ## 체크리스트
+  - [ ] 새 환경변수 → .env.local.example 추가
+  - [ ] DB 변경 → 마이그레이션 파일 포함
+  - [ ] 테스트 추가 또는 기존 테스트 업데이트
+```
+
+---
+
+### 19-3. 주간 유지보수 루틴 (매주 30분)
+
+```
+[월요일 — 에러 점검]
+  □ Sentry 대시보드: 지난 주 신규 에러 확인
+  □ 에러율 급증 구간 없는지 확인
+  □ 결제 웹훅 실패 로그 확인 (Paddle / Toss)
+
+[수요일 — 성능 점검]
+  □ Vercel Analytics: LCP p75 확인 (목표 < 2.5초)
+  □ Supabase Dashboard: 느린 쿼리 (> 200ms) 확인
+  □ Supabase Storage 사용량 추이 확인
+
+[금요일 — 배포 전 확인 (있는 경우)]
+  □ Staging에서 이번 주 변경 기능 직접 테스트
+  □ dev → main PR 생성 + CI 통과 확인
+  □ 운영 배포 후 스모크 테스트 5분
+```
+
+---
+
+### 19-4. 월간 유지보수 루틴 (매월 1회 2시간)
+
+```
+[인프라 & 비용]
+  □ Supabase 월 청구서 확인 (예상 초과 없는지)
+  □ Vercel 월 청구서 확인
+  □ Paddle / Toss 수수료 확인
+  □ SMS / WhatsApp 비용 확인 (초과 충전 불필요 여부)
+
+[보안]
+  □ npm audit — 취약점 패키지 업데이트
+  □ Supabase 대시보드 → API 키 무단 사용 여부 확인
+  □ 비정상 로그인 시도 확인 (Supabase Auth logs)
+
+[데이터]
+  □ Supabase 자동 백업 상태 확인
+  □ 큰 테이블 row 수 확인 (notification_logs, ad_impressions 등)
+  □ 오래된 임시 데이터 정리 (cleanup-expired Edge Function 결과 확인)
+
+[기능 & 콘텐츠]
+  □ 커뮤니티 신고 미처리 건 처리
+  □ 기종DB 기여 대기 승인 처리
+  □ PRO 이탈자 중 재활성화 가능한 사용자 파악
+
+[의존성]
+  □ 주요 패키지 업데이트 (major 버전은 별도 브랜치에서 테스트)
+  □ Supabase CLI 버전 확인
+  □ Node.js LTS 버전 확인
+```
+
+---
+
+### 19-5. 인시던트 대응 (혼자 있을 때)
+
+```
+[장애 감지]
+  UptimeRobot / Sentry → 이메일·SMS 알림 수신
+  → 즉시 Vercel 대시보드 → Functions 탭에서 에러 로그 확인
+
+[빠른 복구 우선]
+Step 1: Vercel 이전 배포로 즉시 롤백 (30초)
+         Vercel 대시보드 → Deployments → "Promote to Production"
+
+Step 2: DB 이슈면 Supabase 대시보드 → Table Editor로 직접 수정
+        마이그레이션 롤백: supabase db push로 이전 버전 재적용
+
+Step 3: 사용자 공지 (5분 이내)
+         앱 배너 또는 이메일로 "일시적 장애, 복구 중" 안내
+
+Step 4: 근본 원인 파악은 복구 후에
+
+[혼자라서 놓치는 것 방지]
+  - 취침 중 장애: UptimeRobot SMS 알림 → 아침에 확인 (경미하면 새벽 미대응 허용)
+  - 휴가 중: Vercel 자동 배포 일시 중단 (GitHub 브랜치 보호 룰로 main push 차단)
+```
+
+---
+
+### 19-6. 기술 부채 관리
+
+```
+[부채 등록 방법]
+  빠르게 개발하다 보면 TODO/FIXME 주석이 늘어남
+  → 주석 대신 GitHub Issues에 등록 (레이블: tech-debt)
+  → 매주 목요일 30분 tech-debt 이슈 1개 처리
+
+[절대 미루면 안 되는 부채]
+  ① 보안 관련: RLS 정책 누락, API 키 노출, XSS 가능성
+  → 발견 즉시 처리 (이번 스프린트 중단하고 먼저)
+  
+  ② 결제 관련: 웹훅 실패 처리 누락, 구독 상태 불일치
+  → 발견 즉시 처리 (돈과 직결)
+  
+  ③ 데이터 손실 가능성: sync_queue 처리 오류, 마이그레이션 실수
+  → 발견 즉시 처리
+
+[미뤄도 되는 부채]
+  - 코드 리팩토링 (동작하면 일단 OK)
+  - 파일 크기 > 800줄 (성능 영향 없으면 OK)
+  - 테스트 커버리지 80% 미달 (핵심 기능만 커버되면 OK)
+  - 주석 없는 복잡한 코드 (tech-debt 이슈 등록 후 나중에)
+```
+
+---
+
+### 19-7. 번아웃 방지 & 개발 속도 유지
+
+```
+[기능 우선순위 원칙 — "지금 사용자가 필요로 하는가?"]
+
+즉시 만들어야 하는 것:
+  → 현재 사용자가 없어서 이탈하는 기능
+  → 결제가 안 되는 버그
+  → 데이터 손실 위험
+
+만들어야 하지만 지금은 아닌 것:
+  → "있으면 좋겠지만" 수준의 기능
+  → 사용자 요청 0건인 채널 (예: LINE)
+  → 랭크 시스템 (사용자 1,000명 이전)
+  → 광고 시스템 (PRO 500명 이전)
+
+절대 만들지 말아야 하는 것 (지금 단계):
+  → 200개국 동시 지원 인프라 (사용자 없을 때)
+  → 중국 시장 대응 (ICP 허가 12~18개월 소요)
+  → Razorpay / Stripe 추가 (Paddle으로 충분할 때까지)
+  → 광고 타겟팅 알고리즘 고도화
+
+[개발 리듬]
+  집중 개발: 2주 스프린트 (기능 완성 목표)
+  정리 주간: 1주 (버그 수정 + 기술부채 + 문서화)
+  → 3주 사이클 권장
+
+[AI 도구 활용 (개발 속도 3~5배)]
+  Claude Code / Cursor: 코드 작성, 버그 분석, 리팩토링
+  GitHub Copilot: 자동완성
+  Supabase AI: SQL 쿼리 자동 생성 (Supabase 대시보드 내장)
+  shadcn/ui: 컴포넌트 복붙 후 커스터마이징 (UI 개발 시간 80% 절감)
+  v0.dev: 복잡한 UI 초안 생성 후 코드로 가져오기
+```
+
+---
+
+### 19-8. 1인 개발 단계별 "하지 말 것" 목록
+
+| Phase | 건너뛰어도 되는 것 | 이유 |
+|-------|-------------------|------|
+| Phase 1 | 모노레포 (Next.js + Vite 분리) | 단일 Next.js 앱으로 시작 |
+| Phase 1 | 12개 언어 지원 | 한국어·영어 2개로 시작 |
+| Phase 1 | E2E 테스트 전 기능 | 고객 등록·조회 핵심 흐름만 |
+| Phase 2 | RTL(아랍어) 지원 | 아랍어 사용자 생기면 추가 |
+| Phase 3 | Toss 결제 | Paddle 단독 먼저 출시 |
+| Phase 3 | 멀티 리전 Supabase | 한국 사용자 기준 Tokyo 단일 |
+| Phase 4 | WhatsApp / LINE 채널 | 이메일+SMS 먼저, 요청 오면 추가 |
+| Phase 4 | 랭크 시스템 | 커뮤니티 MAU 500명 이후 |
+| Phase 4 | Chrome Built-in AI | Gemini API 단일 경로로 충분 |
+| Phase 5 | 광고 시스템 전체 | PRO 구독자 500명 이후 |
+| 전체 | 중국 시장 대응 | 별도 프로젝트 수준, 나중에 |
+| 전체 | GDPR 완전 구현 | 최소: 개인정보처리방침 + 삭제 API |
+
+---
+
+### 19-9. 운영 비용 모니터링 알림 설정
+
+```
+비용이 예산을 초과하지 않도록 알림 설정:
+
+Vercel:
+  Settings → Usage → Spend Limit 설정 ($20/월 알림)
+
+Supabase:
+  Settings → Billing → Alert 설정 (Pro $25 초과 시 알림)
+  Database → Reports → "Slow queries" 주기적 확인
+
+Paddle:
+  대시보드 이상 거래 알림 이메일 활성화
+
+알림 채널 비용:
+  Resend: 월 3,000건 초과 시 알림 설정 (Settings)
+  Coolsms: 잔액 10,000원 이하 SMS 알림
+  Twilio: 잔액 $5 이하 이메일 알림
+
+월간 예상 비용 (MVP, ~100 MAU):
+  Supabase Pro:  $25
+  Vercel Pro:    $20
+  도메인:         ~$1 (Cloudflare, 연간 ~$12)
+  합계:           ~$46/월
+  → PRO 유저 12명이면 인프라 비용 회수
+```
+
+---
+
+---
+
+### 19-10. AI(Claude Code / Cursor)로 개발할 때 기존 기능 보호 전략
+
+> AI로만 개발할 경우 가장 큰 위험은 **AI가 기존에 잘 동작하던 코드를 모르고 수정**하는 것이다.  
+> 아래 전략을 지키면 AI가 새 기능을 추가할 때 기존 기능이 깨지지 않는다.
+
+---
+
+#### ① 테스트가 유일한 안전망 — 반드시 먼저 작성
+
+```
+AI로 개발 시 테스트 없이 코드를 짜면:
+  → AI가 "refactor"라며 기존 로직을 조용히 바꿔버림
+  → 빌드는 성공하지만 기능이 망가짐
+  → 배포 후에야 사용자 신고로 발견
+
+올바른 순서:
+  1. 기존 기능에 대한 테스트를 먼저 작성 (또는 AI에게 테스트 작성 요청)
+  2. 테스트가 통과하는지 확인 (GREEN)
+  3. 새 기능 추가 요청 (AI가 코드 수정)
+  4. 테스트 다시 실행 → 기존 테스트가 깨지면 즉시 발견
+
+AI에게 요청하는 방식:
+  ❌ 나쁜 요청: "work_logs 화면을 리팩토링해줘"
+  ✅ 좋은 요청: "work_logs에 필터 기능을 추가해줘.
+                 기존 테스트가 깨지면 알려줘.
+                 기존 코드는 최소한만 수정해."
+```
+
+---
+
+#### ② CLAUDE.md 파일 — AI에게 지켜야 할 규칙 명시
+
+```markdown
+# CLAUDE.md (프로젝트 루트에 배치)
+# Claude Code가 이 프로젝트에서 반드시 지켜야 할 규칙
+
+## 절대 건드리지 말아야 할 파일/폴더
+- supabase/migrations/ — 기존 마이그레이션 파일 수정 금지
+- apps/app/src/db/schema.ts — Dexie 스키마 (변경 시 반드시 먼저 물어볼 것)
+- .env.local, .env.production — 환경변수 파일
+
+## 코드 수정 원칙
+- 기존 함수 시그니처 변경 금지 (새 함수 추가는 가능)
+- 기존 API 경로 변경 금지
+- 기존 DB 컬럼명 변경 금지 (마이그레이션 없이)
+- 기존 테스트 삭제 금지
+
+## 새 기능 추가 방식
+- 기존 파일을 수정하기보다 새 파일을 만드는 것을 우선
+- 큰 변경 전에 반드시 계획을 먼저 설명하고 승인 후 진행
+
+## DB 변경 시 반드시
+- supabase/migrations/ 에 마이그레이션 파일 생성
+- RLS 정책 변경 시 명시적으로 알릴 것
+```
+
+---
+
+#### ③ CI가 마지막 수문장 — AI가 망가뜨려도 main에는 못 들어옴
+
+```yaml
+# .github/workflows/ci.yml — AI가 코드를 바꿔도 이 파이프라인을 통과해야 main에 들어옴
+
+# AI가 실수해도 CI에서 잡히는 것들:
+#   - TypeScript 타입 오류 (tsc --noEmit)
+#   - ESLint 규칙 위반
+#   - 기존 단위 테스트 실패 (vitest run)
+#   - E2E 핵심 플로우 실패 (Playwright)
+#   - 빌드 실패
+
+# AI가 CI를 통과시키려 억지로 테스트를 수정하는 경우 방지:
+# → 테스트 파일 변경 시 PR Description에 이유 필수 기재 (GitHub CODEOWNERS 또는 PR 템플릿)
+```
+
+---
+
+#### ④ AI에게 작업 범위를 명확히 제한하는 방법
+
+```
+[효과적인 AI 개발 요청 패턴]
+
+패턴 1: 파일 범위 지정
+  "apps/app/src/app/revenue/ 폴더만 수정해서 차트에 기간 필터 추가해줘.
+   다른 폴더는 건드리지 마."
+
+패턴 2: 기존 테스트 보호 명시
+  "기존 테스트(tests/unit/)는 모두 통과해야 해.
+   새 기능 테스트도 추가해줘."
+
+패턴 3: 단계 분리
+  "먼저 어떻게 구현할지 계획만 설명해줘. 코드는 아직 작성하지 마."
+  → 계획 확인 후 → "좋아, 이 계획대로 구현해줘."
+
+패턴 4: DB 변경 주의
+  "DB 스키마 변경이 필요하면 먼저 알려줘.
+   마이그레이션 파일도 같이 생성해줘."
+
+[금지 패턴]
+  ❌ "전체 코드베이스를 리팩토링해줘"
+  ❌ "이 기능과 관련된 모든 파일을 최신화해줘"
+  ❌ "더 좋은 구조로 바꿔줘" (범위가 무한히 늘어남)
+```
+
+---
+
+#### ⑤ 운영 중 새 기능 추가 안전 프로세스
+
+```
+[운영 중에 AI로 새 기능 개발하는 안전한 흐름]
+
+Step 1: feat/새기능 브랜치 생성
+        → AI는 이 브랜치에서만 작업
+
+Step 2: AI에게 요청 전 기존 관련 테스트 실행
+        npx vitest run --reporter=verbose
+        → 모두 PASS인 상태를 확인 (기준선 설정)
+
+Step 3: AI로 새 기능 개발
+
+Step 4: AI 작업 완료 후 즉시 테스트 실행
+        npx vitest run
+        → 기존 테스트 중 FAIL이 있으면 AI에게 수정 요청
+
+Step 5: E2E 핵심 플로우 확인
+        npx playwright test e2e/customer.spec.ts  # 고객 기능 건드렸으면
+        npx playwright test e2e/revenue.spec.ts   # 매출 기능 건드렸으면
+
+Step 6: GitHub PR 생성 → CI 자동 실행
+        → CI 통과 후 Staging 확인 → main 머지
+
+[운영 중 긴급 수정(hotfix)도 같은 방식]
+  hotfix/버그설명 브랜치 → AI로 수정 → 테스트 → CI → main 즉시 머지
+  절대 main에 직접 push하지 않음
+```
+
+---
+
+#### ⑥ AI가 실수했을 때 빠른 복구
+
+```
+[AI가 기존 기능을 망가뜨린 채 배포된 경우]
+
+즉시 복구 (30초):
+  Vercel 대시보드 → Deployments → 이전 배포 "Promote to Production"
+
+DB가 변경됐으면:
+  supabase db push로 이전 마이그레이션 상태 복원
+  (이래서 supabase/migrations/ 파일을 절대 AI가 수정하면 안 됨)
+
+재발 방지:
+  망가진 기능 → 해당 기능 E2E 테스트 추가
+  → 다음에 AI가 같은 실수 하면 CI에서 차단됨
+```
+
+---
+
+#### ⑦ AI 개발 생산성을 높이는 컨텍스트 제공
+
+```
+[AI에게 매번 설명하지 않아도 되도록 프로젝트 문서 정비]
+
+CLAUDE.md (또는 .cursorrules):
+  - 프로젝트 아키텍처 1페이지 요약
+  - DB 테이블 관계도 (텍스트로)
+  - 자주 쓰는 패턴 (Supabase 쿼리 방식, 에러 처리 방식)
+  - 금지 패턴
+
+예시 CLAUDE.md 추가 내용:
+  ## 프로젝트 구조 요약
+  apps/web/ — Next.js, 공개 페이지 (SSR/SSG)
+  apps/app/ — Vite+React, 인증 필요 앱 (CSR)
+  supabase/ — DB 마이그레이션 + Edge Functions
+
+  ## DB 접근 방식
+  - Supabase JS 클라이언트 사용
+  - RLS 활성화 → 서버 클라이언트(service_role)는 Edge Function에서만
+  - 쿼리는 apps/app/src/hooks/ 또는 apps/app/src/db/ 에서 관리
+
+  ## 에러 처리 패턴
+  // 항상 이 형태로:
+  const { data, error } = await supabase.from('customers').select()
+  if (error) throw error
+
+  ## 상태 관리
+  서버 상태: TanStack Query (useQuery, useMutation)
+  클라이언트 상태: Zustand
+  폼 상태: React Hook Form + Zod
+```
+
+---
+
+*최종 업데이트: 2026-05-21 (5차 리뷰 — 1인 개발자 편의성 개선 가이드 §19 추가, AI 개발 안전망 §19-10 추가)*
