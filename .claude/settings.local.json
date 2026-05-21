@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"D:\\\\javaWork\\\\gittest\\\\bitnal_aircon_homeappliance_customerManagementSystem\" -Force)",
-      "Bash(Select-Object -First 20)"
+      "Bash(Select-Object -First 20)",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "PowerShell(npm *)",
+      "PowerShell($env:PATH -split ';' | Where-Object { $_ -ne '' })",
+      "PowerShell([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) -split ';' | Where-Object { $_ -match 'node|npm' })",
+      "PowerShell([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\) -split ';' | Where-Object { $_ -match 'node|npm' })",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"C:\\\\Program Files \\(x86\\)\\\\nodejs\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"C:\\\\Users\\\\ysw\\\\AppData\\\\Local\\\\Programs\" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'node' } | Select-Object Name)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\" -ErrorAction SilentlyContinue | Select-Object Name | Where-Object { $_.Name -match 'node|Node' })",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-PSDrive | Where-Object { $_.Provider -match 'FileSystem' } | Select-Object Root)",
+      "PowerShell(cmd /c \"where node 2>&1\")",
+      "PowerShell(cmd /c \"dir /b \"\"C:\\\\Program Files\\\\nodejs\"\"\")",
+      "PowerShell(cmd /c \"dir /a /b \"\"D:\\\\javaWork\\\\gittest\\\\bitnal_aircon_homeappliance_customerManagementSystem\"\"\")",
+      "PowerShell(New-Item *)"
     ]
   }
 }

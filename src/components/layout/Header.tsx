@@ -5,9 +5,10 @@ import { useAppStore } from '@/store/useAppStore'
 
 interface HeaderProps {
   title?: string
+  right?: React.ReactNode
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, right }: HeaderProps) {
   const { setSidebarOpen } = useAppStore()
 
   return (
@@ -18,7 +19,8 @@ export function Header({ title }: HeaderProps) {
       >
         <Menu size={20} />
       </button>
-      {title && <h1 className="text-lg font-semibold text-gray-900">{title}</h1>}
+      {title && <h1 className="text-lg font-semibold text-gray-900 flex-1">{title}</h1>}
+      {right && <div className="ml-auto">{right}</div>}
     </header>
   )
 }

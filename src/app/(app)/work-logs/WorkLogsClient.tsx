@@ -30,7 +30,7 @@ export function WorkLogsClient() {
       {
         ...values,
         user_id: DEMO_USER_ID,
-        customer_id: '',
+        customer_id: values.customer_id ?? '',
         financials: values.financials.map((f) => ({
           ...f,
           description: f.description || null,
@@ -117,6 +117,7 @@ export function WorkLogsClient() {
             <DialogTitle>{t('workLog.add')}</DialogTitle>
           </DialogHeader>
           <WorkLogForm
+            customers={customers}
             onSubmit={handleSubmit}
             isLoading={isPending}
             onCancel={() => setDialogOpen(false)}

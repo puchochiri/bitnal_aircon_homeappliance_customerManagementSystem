@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -17,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { LocalCustomer } from '@/db/dexie'
 
 const financialSchema = z.object({
   type: z.enum(['revenue', 'cost']),
@@ -25,6 +25,7 @@ const financialSchema = z.object({
 })
 
 const schema = z.object({
+  customer_id: z.string().optional().or(z.literal('')),
   work_type: z.string().min(1, '작업 유형을 선택해주세요'),
   worked_at: z.string().min(1, '작업일을 입력해주세요'),
   memo: z.string().max(1000).optional().or(z.literal('')),
@@ -36,12 +37,20 @@ export type WorkLogFormValues = z.infer<typeof schema>
 const WORK_TYPES = ['cleaning', 'repair', 'inspection', 'installation', 'other']
 
 interface WorkLogFormProps {
+  customers?: LocalCustomer[]
+  defaultCustomerId?: string
   onSubmit: (values: WorkLogFormValues) => void
   isLoading?: boolean
   onCancel: () => void
 }
 
-export function WorkLogForm({ onSubmit, isLoading, onCancel }: WorkLogFormProps) {
+export function WorkLogForm({
+  customers,
+  defaultCustomerId,
+  onSubmit,
+  isLoading,
+  onCancel,
+}: WorkLogFormProps) {
   const { t } = useTranslation()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -49,12 +58,12 @@ export function WorkLogForm({ onSubmit, isLoading, onCancel }: WorkLogFormProps)
     register,
     handleSubmit,
     setValue,
-    watch,
     control,
     formState: { errors },
   } = useForm<WorkLogFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      customer_id: defaultCustomerId ?? '',
       work_type: 'cleaning',
       worked_at: today,
       memo: '',
@@ -66,6 +75,27 @@ export function WorkLogForm({ onSubmit, isLoading, onCancel }: WorkLogFormProps)
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {customers && customers.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>고객</Label>
+          <Select
+            defaultValue={defaultCustomerId ?? ''}
+            onValueChange={(v) => v && setValue('customer_id', v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="고객 선택..." />
+            </SelectTrigger>
+            <SelectContent>
+              {customers.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} {c.phone ? `(${c.phone})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <Label>{t('workLog.workType')} *</Label>
         <Select
@@ -119,7 +149,7 @@ export function WorkLogForm({ onSubmit, isLoading, onCancel }: WorkLogFormProps)
         {fields.map((field, idx) => (
           <div key={field.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
             <span
-              className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+              className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${
                 field.type === 'revenue'
                   ? 'bg-green-100 text-green-700'
                   : 'bg-red-100 text-red-700'
