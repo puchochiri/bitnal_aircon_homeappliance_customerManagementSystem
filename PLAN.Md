@@ -2694,4 +2694,490 @@ develop → main PR 승인 + 머지 → Vercel 자동 Production 배포
 
 ---
 
-*최종 업데이트: 2026-05-21 (3차 리뷰 — 초기 유저 확보 전략 전면 강화)*
+## 18. 글로벌 200개국 동시 배포 — 기술 리스크 & 대응 전략
+
+> 전 세계 동시 오픈 시 발생하는 14개 카테고리 기술 문제와 우선순위별 대응 방안
+
+---
+
+### 18-1. 우선순위 정의
+
+| 등급 | 기준 | 미대응 시 결과 |
+|------|------|----------------|
+| **P0 (CRITICAL)** | 서비스 자체가 동작 불가 | 해당 지역 전체 사용 불가 |
+| **P1 (HIGH)** | 심각한 UX 저하 / 결제 불가 | 이탈률 급등, 매출 손실 |
+| **P2 (MEDIUM)** | 불편함 / 일부 기능 미작동 | 만족도 저하 |
+
+---
+
+### 18-2. P0 — 서비스 동작 불가 수준 (즉시 해결 필수)
+
+#### ① Supabase 단일 리전 레이턴시 (CRITICAL)
+
+**문제:**
+- 현재 계획: Supabase 단일 리전 (기본 `us-east-1`)
+- 동남아시아·오세아니아·유럽 사용자: API 응답 500–800ms
+- 모바일 4G 환경에서 첫 화면 로딩 3–5초 이상
+
+**대응:**
+```
+Supabase Multi-Region Read Replicas 구성
+  Primary (쓰기): us-east-1 (기본 포함)
+  Read Replica 1: ap-southeast-1 (Singapore) → 동남아·한국·일본
+  Read Replica 2: ap-northeast-1 (Tokyo)     → 한국·일본 우선
+  Read Replica 3: ap-southeast-2 (Sydney)    → 오세아니아
+  Read Replica 4: eu-central-1 (Frankfurt)   → 유럽·중동
+
+Read Replica 추가 비용: ~$25/리전/월 (Supabase Pro 기준)
+예상 추가 비용: $100–200/월 (리전 수 × $25)
+```
+
+**쿼리 라우팅 전략:**
+```typescript
+// Supabase 클라이언트 초기화 시 리전 자동 선택
+const getSupabaseClient = (userRegion: string) => {
+  const regionMap: Record<string, string> = {
+    'KR': process.env.SUPABASE_URL_TOKYO,
+    'JP': process.env.SUPABASE_URL_TOKYO,
+    'SG': process.env.SUPABASE_URL_SINGAPORE,
+    'AU': process.env.SUPABASE_URL_SYDNEY,
+    'DE': process.env.SUPABASE_URL_FRANKFURT,
+    // 기본값: Primary
+  };
+  return createClient(regionMap[userRegion] ?? process.env.SUPABASE_URL, ...);
+};
+```
+
+---
+
+#### ② Gemini API 무료 요청 한도 초과 (CRITICAL)
+
+**문제:**
+- 무료 티어: 15 RPM (분당 15회), 1,500 RPM (일 기준)
+- 전 세계 1,000명 동시 접속 시 수분 내 한도 초과
+- 초과 시 Edge Function에서 429 에러 반환
+
+**대응:**
+```
+단계별 전환 계획:
+  MVP (~500 MAU):   무료 티어 + 클라이언트 요청 쓰로틀링 (사용자당 5회/일)
+  성장기 (~5K MAU): Gemini API Pay-as-you-go 전환 (~$3–10/월)
+  스케일 (~50K MAU): Gemini 1.5 Flash 캐싱 + 배치 처리 (~$30–100/월)
+
+캐싱 전략:
+  - 동일 입력의 AI 응답 결과를 Supabase DB에 캐시
+  - 에러코드 조회, 앱 사용법 등 정적 답변은 재생성 없이 재사용
+  - Chrome Built-in AI (Gemini Nano) 우선 사용 → API 호출 70% 절감
+```
+
+---
+
+#### ③ 중국 시장 — 방화장성(Great Firewall) 차단 (CRITICAL)
+
+**문제:**
+- Vercel CDN: 중국에서 차단됨
+- Google (Supabase Auth OAuth, Gemini API): 중국에서 차단됨
+- Meta (Facebook, WhatsApp): 차단됨
+- LINE: 차단됨
+- 대체 가능한 서비스 없이는 중국 사용자 접근 불가
+
+**의사결정 필요:**
+
+| 옵션 | 장점 | 단점 | 비용 |
+|------|------|------|------|
+| A. 중국 제외 | 개발 복잡도 없음 | 세계 최대 시장 포기 | $0 |
+| B. 별도 중국판 | 가장 안정적 | ICP 허가 필수, 12–18개월 소요 | $500+/월 |
+| C. 홍콩 CDN 경유 | 중간 타협 | 불안정, 규정 위반 위험 | $50/월 |
+
+**권장: MVP 단계에서는 Option A (중국 제외), 사용자 증가 후 Option B 검토**
+
+```typescript
+// 중국 접속 감지 → 안내 페이지 표시
+if (countryCode === 'CN') {
+  return <ChinaUnavailablePage message="중국 내 서비스는 준비 중입니다." />;
+}
+```
+
+---
+
+#### ④ GDPR / CCPA / LGPD 데이터 거주지 요건 (CRITICAL)
+
+**문제:**
+- EU(GDPR): 유럽 사용자 개인정보는 EU 외 이전 시 표준 계약 조항(SCC) 또는 적정성 결정 필요
+- 브라질(LGPD): 브라질 사용자 데이터 처리에 동의 명시 필요
+- 캘리포니아(CCPA): 개인정보 판매 거부 옵션 필수
+- 위반 시: EU 기준 매출액의 4% 또는 2천만 유로 중 큰 금액 벌금
+
+**대응:**
+```
+법적 요건 구현 체크리스트:
+  □ 개인정보처리방침 (국가별 법 기준 명시)
+  □ 쿠키 동의 배너 (EU/UK 방문자 대상)
+  □ 데이터 삭제 요청 기능 (계정 삭제 시 30일 내 완전 삭제)
+  □ 데이터 내보내기 기능 (GDPR Article 20: 이식권)
+  □ CCPA: "내 정보를 판매하지 마세요" 링크 (캘리포니아 감지 시)
+  □ Supabase Frankfurt 리전 → EU 사용자 데이터 EU 내 저장
+
+Supabase 설정:
+  - EU 사용자: Frankfurt 리전 Primary 사용
+  - 데이터 처리 계약(DPA): Supabase와 체결 (Pro 플랜 포함)
+```
+
+---
+
+### 18-3. P1 — 심각한 UX 저하 / 매출 직접 손실
+
+#### ⑤ 결제 수단 커버리지 공백 (HIGH)
+
+**문제:**
+- Paddle: 60개국 이상에서 사용 불가 (인도, 파키스탄, 나이지리아, 이집트 등)
+- Toss Payments: 한국 전용
+- 동남아·중동·아프리카 사용자는 결제 수단 없음
+
+**대응:**
+```
+단계별 결제 수단 확장:
+  MVP:      Paddle (글로벌) + Toss (한국)
+  Phase 2:  Razorpay 추가 (인도·동남아 특화)
+  Phase 3:  Stripe 추가 (Paddle 미지원 국가 보완)
+  Phase 4:  지역별 현지 게이트웨이 검토 (필리핀: PayMongo 등)
+
+Paddle 미지원국 사용자 UI:
+  - 결제 화면에서 "현재 지역은 결제를 지원하지 않습니다" 안내
+  - 이메일 알림 신청 버튼 (지원 시작 시 알림)
+  - 무료 기능 계속 사용 유도
+```
+
+---
+
+#### ⑥ 한중일·아랍어 폰트 로딩 성능 (HIGH)
+
+**문제:**
+- Noto Sans CJK (한중일 통합 폰트): 압축 후 약 1–2MB
+- Noto Sans Arabic: 약 500KB
+- Noto Sans Devanagari (힌디어): 약 800KB
+- 4G 환경에서 폰트 로딩에 3–5초 추가 소요
+- 폰트 로딩 전: FOIT(Flash of Invisible Text) 또는 FOUT(Flash of Unstyled Text)
+
+**대응:**
+```
+폰트 최적화 전략:
+  1. font-display: swap → FOUT 허용으로 FOIT 제거
+  2. 서브셋 폰트 사용:
+     - 한국어: KR 사용 빈도 상위 2,350자만 포함 (~150KB)
+     - 일본어: JIS Level 1 (~300KB)
+     - 중국어: GB2312 기본 (~400KB)
+     - 아랍어: 전체 사용 (~500KB)
+  3. Google Fonts API 사용 (CDN 캐싱 활용)
+  4. Next.js next/font 모듈로 자동 최적화
+  5. preload 태그: 현재 로케일 폰트만 우선 로드
+
+CSS 설정:
+  @font-face {
+    font-family: 'Noto Sans KR';
+    font-display: swap;  /* FOIT 방지 */
+    src: url('/fonts/NotoSansKR-subset.woff2') format('woff2');
+  }
+```
+
+---
+
+#### ⑦ iOS PWA 제약 (HIGH)
+
+**문제:**
+- Web Push API: iOS 16.3 이전 미지원 (iOS 16.4+부터 지원, 단 Safari only)
+- IndexedDB 용량 한도: 50MB (Android Chrome: 제한 없음)
+- 백그라운드 동기화(Background Sync API): iOS 미지원
+- PWA "홈 화면 추가" 시 쿠키·세션 초기화 (Safari 버그)
+- PWA 설치 배너: iOS에서 자동 미표시 (수동 안내 필요)
+
+**대응:**
+```
+iOS 대응 전략:
+  1. Push 알림: iOS 16.4+ + Safari에서만 동작 → 
+     - iOS 사용자에게 "Safari에서 홈 화면에 추가" 안내 모달 표시
+     - iOS 16.3 이하: 알림 기능 비활성화 + 이메일 대체 안내
+  
+  2. 50MB 한도:
+     - IndexedDB 사용량 실시간 표시 UI 구현
+     - 30MB 초과 시 "오래된 사진 정리" 권고 알림
+     - 사진은 WebP 압축 + 썸네일 우선 저장
+  
+  3. 배경 동기화:
+     - 앱 실행 시 sync_queue 처리 (Background Sync 대신)
+     - 사용자가 앱 열 때마다 미동기 항목 자동 전송
+  
+  4. 쿠키 초기화 버그:
+     - localStorage + Supabase Session Storage 이중 저장
+     - 세션 복구 로직 App 진입 시 실행
+
+  5. iOS 설치 안내:
+     - Safari UserAgent 감지 → "홈 화면에 추가" 단계별 안내 모달
+     - Chrome/Firefox/Edge 사용자: "Safari로 열기" 안내
+```
+
+---
+
+### 18-4. P2 — 불편함 / 일부 기능 미작동
+
+#### ⑧ 타임존 처리 미구현 (MEDIUM)
+
+**문제:**
+- 현재 계획에 타임존 처리 없음
+- `worked_at date`, `scheduled_at timestamptz` 컬럼 존재
+- 한국(UTC+9) 기준 저장 시 미국 사용자(UTC-5)는 날짜가 14시간 어긋남
+
+**대응:**
+```typescript
+// Day.js + @date-fns/tz 또는 Temporal API 사용
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// 사용자 타임존은 계정 설정에서 저장
+const userTimezone = user.settings.timezone; // 'Asia/Seoul', 'America/New_York' 등
+
+// DB 저장: 항상 UTC
+const utcTime = dayjs.tz(localInput, userTimezone).utc().toISOString();
+
+// 표시: 사용자 로컬 타임존으로 변환
+const localTime = dayjs.utc(dbValue).tz(userTimezone).format('YYYY-MM-DD HH:mm');
+```
+
+**users 테이블 추가 컬럼:**
+```sql
+ALTER TABLE users ADD COLUMN timezone text DEFAULT 'UTC';
+-- 온보딩 시 Intl.DateTimeFormat().resolvedOptions().timeZone 자동 감지
+```
+
+---
+
+#### ⑨ 전화번호 국제 포맷 (MEDIUM)
+
+**문제:**
+- 한국: `010-1234-5678` 형식으로 저장 시 해외 번호 입력 불가
+- SMS 발송 시 E.164 형식 필요: `+821012345678`
+- 200개국 번호 형식 검증 불가
+
+**대응:**
+```typescript
+// libphonenumber-js 사용
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+
+// 입력 UI: 국가 코드 선택 드롭다운 + 번호 입력
+// 저장: E.164 형식으로 정규화
+const phone = parsePhoneNumber(rawInput, countryCode); // 'KR', 'US', 'JP' 등
+if (phone.isValid()) {
+  const e164 = phone.format('E.164'); // '+821012345678'
+  // DB 저장
+}
+
+// 표시: 로컬 형식으로 변환
+const localFormat = phone.formatNational(); // '010-1234-5678'
+```
+
+**패키지 추가:**
+```
+npm install libphonenumber-js  # ~145KB gzipped → 동적 임포트로 초기 번들 제외
+```
+
+---
+
+#### ⑩ 통화·숫자·날짜 포맷 (MEDIUM)
+
+**문제:**
+- 한국: ₩5,500, 날짜 2026-05-21
+- 미국: $4.00, 날짜 05/21/2026
+- 독일: 4,00 €, 날짜 21.05.2026
+- 하드코딩 시 모든 국가에서 한국 형식 표시
+
+**대응:**
+```typescript
+// 브라우저 내장 Intl API 사용 (번들 크기 0 추가)
+const formatCurrency = (amount: number, currency: string, locale: string) =>
+  new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+
+const formatDate = (date: Date, locale: string) =>
+  new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+
+// 사용 예
+formatCurrency(5500, 'KRW', 'ko-KR');  // '₩5,500'
+formatCurrency(4, 'USD', 'en-US');      // '$4.00'
+formatCurrency(4, 'EUR', 'de-DE');      // '4,00 €'
+```
+
+---
+
+#### ⑪ IP 기반 국가 감지 한도 (MEDIUM)
+
+**문제:**
+- ipapi.co 무료 티어: 30,000회/월
+- 전 세계 동시 오픈 후 1,000 MAU 이상 시 한도 초과
+- 초과 시 국가 자동 감지 실패 → 온보딩에서 사용자가 수동 선택 필요
+
+**대응:**
+```
+단계별 전환:
+  MVP (~1K MAU): ipapi.co 무료 (월 30,000회, 충분)
+  성장기 (~5K MAU): MaxMind GeoIP2 Lite (무료, 월 1회 DB 업데이트)
+                   → 서버사이드 조회 (Supabase Edge Function)
+  스케일 (~50K+ MAU): MaxMind GeoIP2 City 유료 ($11/월)
+
+MaxMind GeoIP2 Lite 설정:
+  - Supabase Edge Function에 mmdb 파일 탑재
+  - 클라이언트 IP → Edge Function → 국가 코드 반환
+  - ipapi.co 외부 API 호출 제거 → 레이턴시 감소
+```
+
+---
+
+#### ⑫ WhatsApp / LINE 무료 메시지 한도 (MEDIUM)
+
+**문제:**
+- WhatsApp Business API: 무료 템플릿 메시지 1,000건/월 (Meta 정책)
+- LINE Messaging API: 무료 200건/월
+- 글로벌 1,000 PRO 사용자 기준: 개인당 월 1건 발송도 불가
+
+**대응:**
+```
+단계별 비용 계획:
+  WhatsApp:
+    0–1,000건/월: 무료
+    1,000건+ : $0.005–0.08/메시지 (국가별 차등)
+    1,000 PRO × 2건/월 = $10–160/월
+
+  LINE:
+    200건 초과분: ¥3/건 (일본 기준)
+    1,000 PRO × 2건/월 초과 = ¥6,000/월 (~$40)
+
+  전략:
+    - PRO 사용자 알림 발송 월 100건 포함 → 실제 1인 사용량 제한으로 총량 관리
+    - WhatsApp: 한국 외 글로벌 주력 채널 (이메일 대비 개봉률 5배)
+    - LINE: 일본·태국 한정 제공
+    - 알림 비용을 PRO 구독 가격에 포함 계산 완료 (§8 수익 시뮬레이션 반영)
+```
+
+---
+
+#### ⑬ Supabase 커넥션 풀 고갈 (MEDIUM)
+
+**문제:**
+- Supabase Pro 플랜: PostgreSQL 최대 연결수 200개
+- Next.js SSR + Supabase Edge Functions 동시 요청 시 연결 소진 가능
+- 연결 고갈 시: `remaining connection slots are reserved` 오류
+
+**대응:**
+```
+PgBouncer Transaction Mode 설정:
+  - Supabase 내장 PgBouncer 사용 (Pro 플랜 포함)
+  - Transaction 모드: 쿼리 종료 후 즉시 연결 반환
+  - 설정: DATABASE_URL에 ?pgbouncer=true 파라미터 추가
+  - 권장 연결 수: 애플리케이션 서버당 최대 10개
+
+서버리스 함수 최적화:
+  - Supabase Edge Function: 연결 공유 (글로벌 변수에 클라이언트 캐시)
+  - Vercel Serverless: 각 함수 인스턴스에 단일 연결
+  - 쿼리 최적화: N+1 제거, JOIN으로 단일 쿼리화
+```
+
+---
+
+#### ⑭ RTL(오른쪽→왼쪽) 레이아웃 — 아랍어 (MEDIUM)
+
+**문제:**
+- 아랍어는 RTL 텍스트 방향
+- CSS `left`, `right`, `margin-left`, `padding-right` 등 방향 고정 값 사용 시 레이아웃 깨짐
+- 아이콘 방향: 뒤로가기 화살표(←)가 아랍어에서는 오른쪽(→)이어야 함
+
+**대응:**
+```html
+<!-- HTML lang + dir 설정 -->
+<html lang="ar" dir="rtl">
+
+<!-- CSS: 논리 속성 사용 (방향 자동 전환) -->
+/* 잘못된 방법 */
+.card { margin-left: 16px; padding-right: 12px; }
+
+/* 올바른 방법 (논리 속성) */
+.card { margin-inline-start: 16px; padding-inline-end: 12px; }
+
+/* Tailwind CSS RTL 지원 */
+<div class="ms-4 pe-3">  <!-- margin-inline-start, padding-inline-end -->
+```
+
+```typescript
+// i18next 언어 변경 시 dir 속성 자동 전환
+const RTL_LANGUAGES = ['ar', 'he', 'fa', 'ur'];
+document.documentElement.dir = RTL_LANGUAGES.includes(lang) ? 'rtl' : 'ltr';
+```
+
+---
+
+### 18-5. 글로벌 인프라 비용 시뮬레이션
+
+#### MVP → 스케일 단계별 월 비용 (USD)
+
+| 항목 | MVP (~500 MAU) | 성장기 (~5K MAU) | 스케일 (~50K MAU) |
+|------|----------------|------------------|-------------------|
+| Supabase Pro | $25 | $25 | $25 |
+| Supabase Read Replicas | $0 | $50 (2리전) | $125 (5리전) |
+| Vercel Pro | $20 | $20 | $20 |
+| MaxMind GeoIP2 | $0 (Lite 무료) | $0 (Lite 무료) | $11 |
+| Gemini API | $0 (무료 티어) | $10–30 | $50–150 |
+| WhatsApp API 초과분 | $0 | $20–50 | $100–300 |
+| LINE 초과분 | $0 | $10–20 | $30–80 |
+| 법무·컴플라이언스 | $0 | $100–300 | $500+ |
+| **합계** | **$45/월** | **$235–495/월** | **$861–1,211/월** |
+
+---
+
+### 18-6. 글로벌 배포 전 체크리스트
+
+```
+P0 (출시 전 필수)
+  □ Supabase Read Replica 최소 2개 구성 (Singapore, Frankfurt)
+  □ 중국 접속 감지 → 서비스 미지원 안내 페이지
+  □ GDPR 쿠키 동의 배너 구현 (EU 방문자 감지)
+  □ 개인정보 삭제 요청 기능 (계정 삭제 API)
+  □ 개인정보 내보내기 기능 (GDPR Art.20)
+  □ Gemini API 사용자당 일일 한도 설정 (5회/일)
+
+P1 (출시 1개월 내)
+  □ 한중일·아랍어·힌디어 서브셋 폰트 최적화
+  □ iOS 16.4+ Web Push 지원 + 하위 버전 이메일 대체
+  □ iOS "홈 화면에 추가" 안내 모달
+  □ Razorpay 연동 (인도·동남아 결제)
+  □ 타임존 처리 (users.timezone + dayjs-tz)
+  □ libphonenumber-js 전화번호 검증
+
+P2 (출시 3개월 내)
+  □ MaxMind GeoIP2 Lite 전환 (ipapi.co 한도 대비)
+  □ PgBouncer Transaction Mode 설정
+  □ RTL 레이아웃 전면 검토 (아랍어)
+  □ Intl API 통화·날짜 포맷 전면 적용
+  □ WhatsApp Business API 유료 전환 준비
+  □ 국가별 법적 고지 페이지 (개인정보처리방침 다국어)
+```
+
+---
+
+### 18-7. 추가 기술 스택 (글로벌 대응)
+
+기존 §4 Tech Stack에 추가:
+
+| 라이브러리/서비스 | 용도 | 비용 |
+|-------------------|------|------|
+| `libphonenumber-js` | 200개국 전화번호 E.164 검증/포맷 | 무료 |
+| `dayjs` + `dayjs/timezone` | 타임존 변환 | 무료 |
+| `Intl` API | 통화·날짜·숫자 로케일 포맷 | 내장 (무료) |
+| MaxMind GeoIP2 Lite | 서버사이드 IP→국가 감지 | 무료 |
+| Supabase Read Replicas | 아시아·유럽 레이턴시 감소 | $25/리전/월 |
+| PgBouncer (내장) | PostgreSQL 커넥션 풀 관리 | Supabase Pro 포함 |
+| Razorpay | 인도·동남아 결제 | 거래 수수료 |
+
+---
+
+*최종 업데이트: 2026-05-21 (4차 리뷰 — 글로벌 200개국 동시 배포 기술 리스크 분석 추가)*
