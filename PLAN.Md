@@ -80,7 +80,7 @@
 | 설치 가전 등록 | 기종명, 브랜드, 설치일, 위치(실내/실외/주방 등) |
 | 작업 이력 | 작업 날짜, 종류(세척/수리/점검), 금액, 사진, 메모 |
 | 예약·일정 관리 | 방문 예약 캘린더, 반복 일정, 알림 → 3-6 캘린더 섹션 참고 |
-| 매출 통계 | 월별/고객별/기종별 집계 |
+| 매출 통계 | 월별/고객별/기종별/가전별 매출·비용·이익 집계 (work_financials 기반) |
 | 현장 사진 | 카메라 API → 촬영 → 압축 → 저장 |
 | GPS 방문 기록 | Geolocation API로 현장 좌표 저장 |
 | 전화 연결 | tel: 링크로 즉시 통화 |
@@ -351,7 +351,7 @@ URL:     https://도메인/community/post/:id
 | 이메일 | Resend (월 3,000건 무료) | 무료~소액 | 전 세계 |
 | 카카오톡 | 카카오 알림톡 API | 건당 과금 | 한국 |
 | WhatsApp | Meta Business API | 건당 과금 | 글로벌 |
-| LINE | LINE Notify API | 무료 | 일본·동남아 |
+| LINE | LINE Messaging API (월 200건 무료) | 무료~소액 | 일본·동남아 |
 
 #### 발송 트리거 유형
 
@@ -1050,13 +1050,37 @@ appliances
 
 work_logs
   id              uuid PK
+  user_id         uuid FK → users.id        -- 매출 대시보드 직접 쿼리용 (join 없이)
   customer_id     uuid FK → customers.id
-  appliance_id    uuid FK → appliances.id
   work_type       text   -- cleaning / repair / inspection
   worked_at       date
-  amount          numeric
   memo            text
   created_at      timestamptz
+  -- ※ appliance_id 제거 → work_log_appliances(1:m)로 분리
+  -- ※ amount 제거 → work_financials(1:m)로 분리
+
+-- 1:m — 작업 1건에 여러 가전 연결
+work_log_appliances
+  id              uuid PK
+  work_log_id     uuid FK → work_logs.id
+  appliance_id    uuid FK → appliances.id
+  note            text                      -- 가전별 작업 메모 (선택)
+
+-- 1:m — 작업 1건에 여러 매출·비용 항목
+work_financials
+  id              uuid PK
+  work_log_id     uuid FK → work_logs.id
+  type            text CHECK IN ('revenue','cost')
+    -- revenue: 매출 (출장비, 세척비, 수리비 등)
+    -- cost:    비용 (부품비, 재료비, 외주비, 교통비 등)
+  category        text                      -- '출장비' / '세척비' / '부품비' / '인건비' / '기타'
+  amount          numeric NOT NULL
+  memo            text
+  created_at      timestamptz
+
+-- 집계 뷰 (애플리케이션에서 참고)
+-- 이익 = SUM(amount) FILTER (type='revenue') - SUM(amount) FILTER (type='cost')
+-- 월별 매출 = GROUP BY DATE_TRUNC('month', w.worked_at), SUM WHERE type='revenue'
 
 work_photos
   id              uuid PK
@@ -1066,6 +1090,7 @@ work_photos
 
 appointments
   id              uuid PK
+  user_id         uuid FK → users.id         -- 캘린더 직접 쿼리용 (customer join 불필요)
   customer_id     uuid FK → customers.id
   appliance_id    uuid FK → appliances.id   -- 연결 가전 (선택)
   scheduled_at    timestamptz
@@ -1342,6 +1367,40 @@ ad_clicks
   created_at   timestamptz
 ```
 
+### DB 인덱스 전략
+
+```sql
+-- 고빈도 쿼리 기준 필수 인덱스
+
+-- 커뮤니티 피드: 국가별 최신순 정렬
+CREATE INDEX idx_posts_country_created ON posts (country_code, created_at DESC);
+
+-- 커뮤니티 종목 필터링
+CREATE INDEX idx_posts_appliance_types ON posts USING GIN (appliance_types);
+
+-- 캘린더: 사용자별 일정 조회
+CREATE INDEX idx_appointments_user_scheduled ON appointments (user_id, scheduled_at);
+
+-- 매출 통계: 사용자·날짜 기반 집계
+CREATE INDEX idx_work_logs_user_worked ON work_logs (user_id, worked_at DESC);
+CREATE INDEX idx_work_financials_log_type ON work_financials (work_log_id, type);
+
+-- 고객 알림: 발송 큐 조회
+CREATE INDEX idx_notification_logs_user_sent ON notification_logs (user_id, sent_at DESC);
+
+-- 포인트 랭킹: 월간 포인트 정렬
+CREATE INDEX idx_user_points_monthly ON user_points (monthly_points DESC);
+CREATE INDEX idx_user_points_total ON user_points (total_points DESC);
+
+-- 게시글 전문 검색 (Supabase Full-text Search)
+CREATE INDEX idx_posts_fts ON posts
+  USING GIN (to_tsvector('simple', title || ' ' || coalesce(content, '')));
+
+-- 광고 노출 집계
+CREATE INDEX idx_ad_impressions_campaign ON ad_impressions (campaign_id, created_at DESC);
+CREATE INDEX idx_ad_clicks_campaign ON ad_clicks (campaign_id, created_at DESC);
+```
+
 ---
 
 ## 6. 로컬 ↔ 클라우드 동기화 설계
@@ -1368,12 +1427,14 @@ ad_clicks
 
 ```typescript
 db.version(1).stores({
-  customers:    '++id, name, phone, updatedAt',
-  appliances:   '++id, customerId, brand, modelName',
-  workLogs:     '++id, customerId, applianceId, workedAt',
-  workPhotos:   '++id, workLogId',
-  appointments: '++id, customerId, scheduledAt, status',
-  sync_queue:   '++id, tableName, operation, createdAt',
+  customers:         '++id, name, phone, updatedAt',
+  appliances:        '++id, customerId, brand, modelName',
+  workLogs:          '++id, customerId, workedAt',          // appliance_id 제거
+  workLogAppliances: '++id, workLogId, applianceId',        // 1:m 가전 연결
+  workFinancials:    '++id, workLogId, type',               // 1:m 매출/비용 항목
+  workPhotos:        '++id, workLogId',
+  appointments:      '++id, customerId, scheduledAt, status',
+  sync_queue:        '++id, tableName, operation, createdAt',
 });
 ```
 
@@ -1386,26 +1447,34 @@ db.version(1).stores({
 /login                      로그인
 /register                   회원가입
 
-/app                        앱 홈 대시보드 (FREE 이상)
-/app/customers              고객 목록
-/app/customers/:id          고객 상세 + 가전 + 작업이력
-/app/customers/new          고객 등록
-/app/calendar               캘린더 (월간 뷰 기본)
-/app/calendar/week          주간 뷰
-/app/calendar/day           일간 뷰
-/app/calendar/list          목록 뷰 (모바일 기본)
-/app/calendar/event/:id     일정 상세/수정
-/app/calendar/event/new     일정 등록
-/app/revenue                매출 통계
-/app/notify                 알림 발송 홈 (단건·일괄 선택)
-/app/notify/bulk            일괄 홍보 발송 — 수신자 선택 → 문구 생성 → 발송
-/app/notify/bulk/:id        발송 캠페인 결과 상세
-/app/notify/history         발송 이력 전체 목록
-/app/settings               계정 + 구독 관리
-/app/settings/interests     취급 종목 선택·변경
-/app/profile                내 프로필 (랭크·포인트·뱃지·기여 이력)
-/app/profile/:userId        다른 사용자 프로필 (공개)
-/onboarding                 첫 로그인 온보딩 (종목·지역·경력 설정)
+/app                              앱 홈 대시보드 (FREE 이상)
+/app/customers                    고객 목록
+/app/customers/new                고객 등록
+/app/customers/:id                고객 상세 + 가전 목록 + 작업이력
+/app/customers/:id/edit           고객 정보 수정
+/app/customers/:id/appliances/new 가전 등록
+/app/customers/:id/appliances/:appId/edit  가전 수정
+/app/customers/:id/work-logs/new  작업 이력 등록 (매출·비용 항목 포함)
+/app/customers/:id/work-logs/:logId       작업 이력 상세/수정
+/app/calendar                     캘린더 (월간 뷰 기본)
+/app/calendar/week                주간 뷰
+/app/calendar/day                 일간 뷰
+/app/calendar/list                목록 뷰 (모바일 기본)
+/app/calendar/event/new           일정 등록
+/app/calendar/event/:id           일정 상세/수정
+/app/revenue                      매출·비용·이익 통계 대시보드
+/app/revenue/detail               거래 항목 상세 목록 (work_financials 전체)
+/app/notify                       알림 발송 홈 (단건·일괄 선택)
+/app/notify/bulk                  일괄 홍보 발송 — 수신자 선택 → 문구 생성 → 발송
+/app/notify/bulk/:id              발송 캠페인 결과 상세
+/app/notify/history               발송 이력 전체 목록
+/app/settings                     계정 + 구독 관리
+/app/settings/interests           취급 종목 선택·변경
+/app/settings/region              국가·도시 설정
+/app/settings/referral            내 추천인 코드 + 추천 현황
+/app/profile                      내 프로필 (랭크·포인트·뱃지·기여 이력)
+/app/profile/:userId              다른 사용자 프로필 (공개)
+/onboarding                       첫 로그인 온보딩 (종목·지역·경력 설정)
 
 /models                     기종 DB 목록 (비회원 공개)
 /models/:id                 기종 상세 + 오류코드 + 가이드
@@ -1492,27 +1561,35 @@ db.version(1).stores({
 
 ### 수익 시뮬레이션
 
+> ⚠️ 랭크 무료 PRO 사용자 (전문가 이상) 비율 가정:  
+> 초기 약 5~10%, 성숙기 약 15~20% (적극 기여자) → 실 구독 수 = 전체 PRO 사용자 × (1 - 무료 랭크 비율)
+
 ```
-[PRO 100명, $4/월 + SMS 충전 $50]
-  매출:          $450/월
-  토스/Paddle 수수료: ~$18 (4%)
+[PRO 활성 100명, 그 중 유료 구독 90명 + SMS 충전 $50]
+  구독 매출:     $360/월 (90명 × $4)
+  SMS 충전:      $50
+  토스/Paddle 수수료: ~$16 (4%)
   인프라:         $26 (Supabase Pro)
   SMS 원가:       $30 (Coolsms)
-  순이익:         $376/월 (마진 84%)
+  순이익:         $338/월 (마진 82%)
+  ※ 랭크 무료 10명은 커뮤니티 기여로 콘텐츠 가치 제공 (간접 수익)
 
-[PRO 1,000명 + 광고 $300 + SMS 충전 $300]
-  매출:          $4,600/월
-  수수료:         ~$184
+[PRO 활성 1,000명, 유료 850명 + 광고 $300 + SMS 충전 $300]
+  구독 매출:     $3,400/월 (850명 × $4)
+  광고+SMS:      $600
+  수수료:         ~$160
   인프라:         $50
   SMS 원가:       $180
-  순이익:         $4,186/월 (마진 91%)
+  순이익:         $3,610/월 (마진 90%)
 
-[PRO 5,000명 + 광고 $1,000 + SMS 충전 $1,000]
-  매출:          $22,000/월
-  수수료:         ~$880
+[PRO 활성 5,000명, 유료 4,200명 + 광고 $1,000 + SMS 충전 $1,000]
+  구독 매출:     $16,800/월 (4,200명 × $4)
+  광고+SMS:      $2,000
+  수수료:         ~$756
   인프라:         $100
   SMS 원가:       $600
-  순이익:         $20,420/월 (마진 93%)
+  순이익:         $17,344/월 (마진 93%)
+  ※ 랭크 무료 800명이 생성한 콘텐츠 → 신규 유입·광고 단가 상승 견인
 ```
 
 ---
@@ -1524,15 +1601,18 @@ db.version(1).stores({
 
 - [ ] 프로젝트 셋업 (Vite + React + TypeScript + Tailwind + shadcn)
 - [ ] PWA 설정 (vite-plugin-pwa + Service Worker + manifest)
-- [ ] Dexie 스키마 + CRUD 훅
+- [ ] **테스트 환경 설정** (Vitest + React Testing Library + Playwright — CI 기반)
+- [ ] ESLint + Prettier + Husky pre-commit hook 설정
+- [ ] Dexie 스키마 + CRUD 훅 (work_financials 1:m 포함)
 - [ ] 고객 등록/조회/수정/삭제
-- [ ] 가전 등록 (고객별)
-- [ ] 작업 이력 등록 + 현장 사진 촬영
+- [ ] 가전 등록·수정·삭제 (고객별, 1:m)
+- [ ] 작업 이력 등록 (현장 사진 촬영 + 가전 다중 선택)
+- [ ] 작업별 매출·비용 항목 입력 (work_financials 1:m — 항목 추가/삭제)
+- [ ] 매출·비용·이익 통계 화면 (월별/기종별 차트, 항목별 내역)
 - [ ] 캘린더 일정관리 (월간/주간/일간/목록 뷰, 드래그앤드롭)
 - [ ] 일정 유형별 색상 구분 (방문/정기세척/부품교체/개인)
 - [ ] 가전 등록 시 정기 세척·부품 교체 일정 자동 생성
 - [ ] 작업 완료 처리 → 다음 정기 일정 자동 갱신
-- [ ] 매출 통계 (월별 차트)
 - [ ] CSV Export/Import (로컬 백업)
 - [ ] PWA 설치 UX (iOS/Android/Desktop)
 - [ ] 온보딩 화면 (종목 선택 → 지역 → 경력)
@@ -1974,7 +2054,7 @@ CSV 내보내기 1클릭 제공 (FREE도 가능):
 | 문서 | 내용 |
 |------|------|
 | 이용약관 | 서비스 이용 조건, 금지 행위, 분쟁 해결 |
-| 개인정보처리방침 | 수집 항목, 보유 기간, 제3자 제공 (한국어·영어 필수) |
+| 개인정보처리방침 | 수집 항목, 보유 기간, 제3자 제공 (한국어·영어 필수), 수탁사 목록 공개 (한국 개인정보보호법 §26) |
 | 쿠키 정책 | GDPR 쿠키 동의 배너 (EU 사용자 접속 시 자동 표시) |
 | 환불 정책 | 14일 이내 100% 환불, 이후 비례 환불 |
 | 계정 삭제 정책 | 설정 화면에서 삭제 신청 → 30일 유예 → 전체 데이터 삭제 (GDPR Article 17 대응) |
@@ -1996,11 +2076,15 @@ CSV 내보내기 1클릭 제공 (FREE도 가능):
 | 항목 | 목표 |
 |------|------|
 | PWA 성능 | Lighthouse PWA/Performance 90점 이상 |
+| 접근성 | Lighthouse Accessibility 90점 이상 (WCAG 2.1 AA 준수) |
 | 오프라인 | 핵심 기능(고객 조회/작업 등록) 오프라인 완전 작동 |
 | 보안 | Supabase RLS(Row Level Security) 전 테이블 적용 |
 | SEO / GEO | 공개 페이지 SSR/SSG, JSON-LD 구조화 데이터, llms.txt, AI 크롤러 허용 |
 | API 응답 | < 200ms (Supabase 리전 최적화) |
 | GDPR | EU 사용자 개인정보 처리방침 + 삭제 요청 대응 |
+| 한국 개인정보보호법 | 개인정보처리방침 한국어 필수, 수탁사 공개, 열람·삭제·정정 요청 대응 |
+| 데이터 보존 | PRO 만료 후 30일 보존 → 경고 후 삭제 / 계정 삭제 신청 30일 유예 후 완전 삭제 |
+| 테스트 커버리지 | 단위 테스트 80% 이상 (Vitest), E2E 핵심 플로우 (Playwright) |
 
 ---
 
@@ -2066,25 +2150,303 @@ bitnal/                        ← 모노레포 루트
 ├── packages/
 │   └── shared/                ← 공통 타입·유틸 (두 앱이 공유)
 │
+├── tests/
+│   ├── unit/                  ← Vitest 단위 테스트
+│   │   ├── hooks/
+│   │   ├── utils/
+│   │   └── db/
+│   ├── e2e/                   ← Playwright E2E 테스트
+│   │   ├── customer.spec.ts   # 고객 CRUD 플로우
+│   │   ├── calendar.spec.ts   # 캘린더 플로우
+│   │   ├── revenue.spec.ts    # 매출 통계 플로우
+│   │   ├── auth.spec.ts       # 로그인·결제 플로우
+│   │   └── community.spec.ts  # 게시글 작성·번역·공유 플로우
+│   └── playwright.config.ts
+│
 └── supabase/
-    ├── migrations/            # DB 마이그레이션
+    ├── migrations/            # DB 마이그레이션 (순번_설명.sql)
     └── functions/             # Edge Functions
         ├── gemini-proxy/      # Gemini API 키 보호 프록시
         ├── sitemap-gen/       # Sitemap 자동 생성
         ├── bulk-send/         # 일괄 발송 큐
-        └── monthly-rewards/   # 월간 포상 cron
+        ├── monthly-rewards/   # 월간 포상 cron
+        └── cleanup-expired/   # 만료 데이터 정리 cron (PRO 만료 30일 경과)
 ```
 
 ---
 
-## 16. 즉시 시작할 작업
+## 16. CI/CD & 배포 파이프라인
 
-1. `npm create vite@latest` — React + TypeScript 프로젝트 생성
-2. Tailwind CSS + shadcn/ui 설치
-3. vite-plugin-pwa 설정 (manifest + Service Worker)
-4. Dexie 스키마 첫 버전 작성
-5. 고객 CRUD 화면 구현 (Phase 1 첫 기능)
+> 개발 서버에서 모든 검증을 통과한 후에만 운영 서버에 배포한다.
+> 모든 과정은 **GitHub Actions + Vercel**로 자동화한다.
 
 ---
 
-*최종 업데이트: 2026-05-21 (pre-dev 전체 리뷰 반영)*
+### 16-1. 브랜치 전략
+
+```
+main          ← 운영 서버 (Production) — 직접 push 금지
+  └─ develop  ← 개발 통합 브랜치 (Staging Preview)
+       └─ feature/xxx   개별 기능 개발
+       └─ fix/xxx       버그 수정
+       └─ chore/xxx     설정·의존성 변경
+```
+
+**규칙:**
+- `feature/*` → `develop` : PR 필수 (코드 리뷰 1명 이상)
+- `develop` → `main` : PR 필수 + CI 전체 통과 + 스테이징 확인 완료 후 병합
+- `main` 직접 push 금지 — branch protection rule 설정
+
+---
+
+### 16-2. 개발 서버 검증 체크리스트 (PR 머지 전 필수)
+
+#### 자동 검사 (GitHub Actions — PR 생성 시 자동 실행)
+
+```
+[Step 1] 코드 품질
+  ✅ TypeScript 컴파일 오류 없음 (tsc --noEmit)
+  ✅ ESLint 경고·오류 없음 (eslint .)
+  ✅ Prettier 포맷 통과 (prettier --check)
+
+[Step 2] 테스트
+  ✅ 단위 테스트 전체 통과 (vitest run)
+  ✅ 테스트 커버리지 80% 이상 (vitest --coverage)
+  ✅ E2E 테스트 핵심 플로우 통과 (Playwright)
+      - 고객 등록 → 작업 이력 → 매출 통계 흐름
+      - 로그인 → PRO 업그레이드 → 멀티기기 동기화 흐름
+      - 게시글 작성 → 번역 → SNS 공유 흐름
+
+[Step 3] 빌드
+  ✅ Next.js 빌드 성공 (next build — 공개 페이지)
+  ✅ Vite 빌드 성공 (vite build — 앱 페이지)
+  ✅ 빌드 번들 크기 한도 초과 없음 (vite-bundle-analyzer 경보)
+
+[Step 4] Supabase 마이그레이션 검사
+  ✅ supabase db diff — 예상치 못한 스키마 변경 없음
+  ✅ RLS 정책 변경 시 보안 리뷰 필수 (PR 설명에 명시)
+```
+
+#### 수동 확인 (PR 리뷰어가 Staging Preview에서 직접 확인)
+
+```
+Vercel이 PR마다 고유 Preview URL 자동 생성:
+  https://bitnal-pr-{번호}.vercel.app
+
+확인 항목:
+  [ ] 핵심 기능 동작 (고객 CRUD, 캘린더, 알림 발송)
+  [ ] 모바일 레이아웃 (iOS Safari / Android Chrome)
+  [ ] 다국어 표시 (한국어 / 영어 최소 2개 언어)
+  [ ] RTL 레이아웃 (아랍어 — 필요 시)
+  [ ] 오프라인 동작 (Service Worker 캐시 확인)
+  [ ] PWA 설치 UX (홈 화면 추가 배너)
+  [ ] Lighthouse 점수 확인
+      - Performance: 90점 이상
+      - PWA: 100점
+      - Accessibility: 90점 이상
+      - SEO: 90점 이상 (공개 페이지)
+```
+
+---
+
+### 16-3. GitHub Actions CI 파이프라인
+
+```yaml
+# .github/workflows/ci.yml — PR 시 자동 실행
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npx tsc --noEmit           # 타입 검사
+      - run: npx eslint .               # 린트
+      - run: npx prettier --check .     # 포맷
+
+  test:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npx vitest run --coverage  # 단위 테스트 + 커버리지
+      - run: npx playwright install --with-deps
+      - run: npx playwright test        # E2E 테스트
+
+  build:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npm run build              # Next.js + Vite 빌드
+```
+
+---
+
+### 16-4. 환경 변수 관리
+
+```
+환경별 분리:
+  .env.local          ← 로컬 개발 전용 (git 제외 — .gitignore 필수)
+  .env.development    ← develop 브랜치 / Staging (Vercel 환경변수)
+  .env.production     ← main 브랜치 / Production (Vercel 환경변수)
+
+주요 환경변수:
+  NEXT_PUBLIC_SUPABASE_URL          Supabase 프로젝트 URL
+  NEXT_PUBLIC_SUPABASE_ANON_KEY     Supabase 공개 키 (브라우저용)
+  SUPABASE_SERVICE_ROLE_KEY         서비스 롤 키 (서버 전용, 절대 노출 금지)
+  GEMINI_API_KEY                    Gemini API 키 (Edge Function 전용)
+  PADDLE_API_KEY                    Paddle 시크릿 키 (서버 전용)
+  PADDLE_WEBHOOK_SECRET             Paddle 웹훅 서명 검증
+  TOSS_SECRET_KEY                   토스페이먼츠 시크릿 키 (서버 전용)
+  RESEND_API_KEY                    이메일 발송 키
+  COOLSMS_API_KEY / TWILIO_SID      SMS 발송 키
+
+⚠️ 규칙:
+  - NEXT_PUBLIC_ 접두사 없는 키 → 클라이언트에 절대 노출 안 됨
+  - 모든 시크릿은 Vercel 대시보드 → Environment Variables에 등록
+  - 로컬에서 실수로 .env.local을 커밋하지 않도록
+    pre-commit hook으로 .env 파일 감지 시 커밋 차단
+```
+
+---
+
+### 16-5. Supabase 마이그레이션 배포 절차
+
+```
+DB 스키마 변경 시 반드시 이 순서를 따른다:
+
+[개발]
+1. 로컬 Supabase 실행 (supabase start)
+2. 스키마 변경 후 마이그레이션 파일 생성
+   supabase db diff -f 0002_add_work_financials
+3. 로컬에서 마이그레이션 적용 확인
+   supabase db reset
+4. RLS 정책 추가/수정 확인 (supabase/migrations/ 파일 리뷰)
+
+[Staging 배포]
+5. develop 브랜치 머지 후 Staging Supabase에 수동 적용
+   supabase db push --project-ref {staging-ref}
+6. Staging에서 기능 동작 + 데이터 이상 없음 확인
+
+[Production 배포]
+7. main 브랜치 머지 전 Production 마이그레이션 실행
+   supabase db push --project-ref {prod-ref}
+8. Vercel Production 배포 (자동 트리거)
+9. 배포 후 즉시 스모크 테스트 (아래 16-6 참고)
+```
+
+---
+
+### 16-6. 운영 서버 배포 절차
+
+```
+[배포 트리거]
+develop → main PR 승인 + 머지 → Vercel 자동 Production 배포
+
+[배포 전 최종 확인 (머지 전)]
+  [ ] CI 전체 통과 확인 (GitHub Actions 초록불)
+  [ ] Staging Preview에서 변경 기능 직접 확인 완료
+  [ ] Supabase 마이그레이션 Production 적용 완료
+  [ ] 환경변수 변경 사항 Vercel Production에 반영 완료
+  [ ] Sentry 릴리즈 태그 생성 (에러 추적 기준점)
+
+[배포 후 스모크 테스트 (5분 이내)]
+  [ ] 랜딩 페이지 정상 로딩
+  [ ] 로그인 / 회원가입 동작
+  [ ] 고객 등록 + 조회 동작
+  [ ] 커뮤니티 게시글 조회 동작
+  [ ] 결제 페이지 진입 (실제 결제는 하지 않음)
+  [ ] Sentry → 신규 에러 급증 없음 확인
+  [ ] Vercel Analytics → 응답 속도 정상 범위 확인
+
+[이상 발생 시 즉시 롤백]
+  Vercel 대시보드 → Deployments → 이전 배포 "Promote to Production"
+  → 30초 이내 롤백 완료 (Vercel 인스턴트 롤백)
+  Supabase DB 롤백: 마이그레이션 되돌리기 스크립트 미리 준비
+```
+
+---
+
+### 16-7. 모니터링 & 알림
+
+```
+배포 후 상시 감시:
+
+[에러 모니터링] Sentry
+  - 새 에러 발생 시 Slack / 이메일 알림
+  - 에러율 급증 시 즉시 알림 (임계값: 분당 10건 이상)
+  - 소스맵 연동으로 정확한 코드 위치 추적
+
+[성능 모니터링] Vercel Analytics
+  - Core Web Vitals (LCP / CLS / INP) 실시간 추적
+  - p75 LCP > 3초 시 Slack 알림
+
+[서버 상태] Supabase Dashboard
+  - DB 커넥션 수 / 쿼리 응답 시간 / Storage 사용량
+
+[가용성] UptimeRobot (무료)
+  - 1분마다 헬스체크 → 장애 시 SMS + 이메일 알림
+  - 모니터링 URL:
+      https://도메인/              (랜딩)
+      https://도메인/api/health    (헬스체크 엔드포인트)
+
+[결제 이상] Paddle / 토스 웹훅 실패 알림
+  - 웹훅 수신 실패 시 Supabase Edge Function 로그 확인
+  - 결제 완료 후 tier 업데이트 누락 시 자동 재처리 로직 구현
+```
+
+---
+
+### 16-8. 배포 환경 요약
+
+| 환경 | 브랜치 | URL | Supabase | 목적 |
+|------|--------|-----|----------|------|
+| Local | feature/* | localhost:3000 | 로컬 Supabase | 개발·디버깅 |
+| Preview | PR 브랜치 | *.vercel.app (PR별) | Staging DB | PR 리뷰·QA |
+| Staging | develop | staging.도메인 | Staging Supabase | 통합 테스트 |
+| Production | main | 도메인 | Production Supabase | 실 서비스 |
+
+---
+
+## 17. 즉시 시작할 작업
+
+**Day 1 — 프로젝트 뼈대**
+1. 모노레포 초기화 (`npm workspaces` 또는 `pnpm` 권장)
+2. `apps/app/` — Vite + React + TypeScript 생성
+3. `apps/web/` — Next.js App Router 생성
+4. Tailwind CSS + shadcn/ui 설치 (두 앱 공통 설정)
+5. ESLint + Prettier + Husky pre-commit hook 설정
+
+**Day 2 — 로컬 데이터 기반**
+6. vite-plugin-pwa 설정 (manifest + Service Worker)
+7. Dexie 스키마 첫 버전 작성 (work_financials 1:m 포함)
+8. Vitest + React Testing Library + Playwright 설정
+
+**Day 3 — CI/CD 연결**
+9. GitHub Actions CI 파이프라인 설정 (`.github/workflows/ci.yml`)
+10. Vercel 프로젝트 생성 + `develop` → Staging, `main` → Production 연결
+11. `.env.local.example` 파일 작성 + `.gitignore`에 `.env.local` 추가
+
+**이후 — Phase 1 핵심 기능**
+12. 고객 등록/조회/수정/삭제
+13. 가전 등록 (1:m)
+14. 작업 이력 + 매출/비용 항목 입력 (work_financials 1:m)
+15. 매출·비용·이익 통계 화면
+
+---
+
+*최종 업데이트: 2026-05-21 (2차 전체 리뷰 — 인덱스·라우팅·테스트·수익모델 보완)*
