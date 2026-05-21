@@ -1,13 +1,19 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
+import { RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/Header'
 import { localeNames, supportedLocales, type Locale } from '@/i18n/config'
+import { useSync } from '@/hooks/useSync'
+import { useAuthStore } from '@/store/useAuthStore'
 
 export function SettingsClient() {
   const { t, i18n } = useTranslation()
+  const { user } = useAuthStore()
+  const { sync, status } = useSync(user?.id ?? null)
 
   function changeLang(lang: Locale) {
     i18n.changeLanguage(lang)
@@ -18,6 +24,14 @@ export function SettingsClient() {
     <>
       <Header title={t('nav.settings')} />
       <div className="p-4 space-y-4">
+        {user && (
+          <Card className="p-4 space-y-3">
+            <h2 className="text-sm font-medium text-gray-700">계정</h2>
+            <p className="text-sm text-gray-600">{user.email}</p>
+            <p className="text-sm text-gray-500">{user.name ?? '-'}</p>
+          </Card>
+        )}
+
         <Card className="p-4 space-y-3">
           <h2 className="text-sm font-medium text-gray-700">언어 설정</h2>
           <div className="flex gap-2">
@@ -35,6 +49,31 @@ export function SettingsClient() {
               </button>
             ))}
           </div>
+        </Card>
+
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-medium text-gray-700">클라우드 동기화</h2>
+          {user ? (
+            <>
+              <p className="text-xs text-gray-400">
+                로컬(IndexedDB) 데이터를 Supabase 클라우드와 동기화합니다
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={sync}
+                disabled={status === 'syncing'}
+                className="w-full"
+              >
+                <RefreshCw size={14} className={`mr-2 ${status === 'syncing' ? 'animate-spin' : ''}`} />
+                {status === 'syncing' ? '동기화 중...' : '지금 동기화'}
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-400">
+              동기화하려면 로그인이 필요합니다
+            </p>
+          )}
         </Card>
 
         <Card className="p-4 space-y-2">
