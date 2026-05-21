@@ -1,0 +1,131 @@
+{
+  "app": {
+    "name": "비트날",
+    "tagline": "에어컨 세척·가전 유지보수 관리"
+  },
+  "nav": {
+    "dashboard": "대시보드",
+    "customers": "고객 관리",
+    "workLogs": "작업 일지",
+    "calendar": "캘린더",
+    "revenue": "매출 관리",
+    "settings": "설정"
+  },
+  "common": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "수정",
+    "add": "추가",
+    "search": "검색",
+    "loading": "로딩 중...",
+    "error": "오류가 발생했습니다",
+    "confirm": "확인",
+    "back": "뒤로",
+    "close": "닫기",
+    "name": "이름",
+    "phone": "전화번호",
+    "email": "이메일",
+    "address": "주소",
+    "memo": "메모",
+    "createdAt": "등록일",
+    "updatedAt": "수정일",
+    "actions": "작업"
+  },
+  "customer": {
+    "title": "고객 관리",
+    "add": "고객 추가",
+    "edit": "고객 수정",
+    "delete": "고객 삭제",
+    "deleteConfirm": "이 고객을 삭제하시겠습니까?",
+    "empty": "등록된 고객이 없습니다",
+    "searchPlaceholder": "이름, 전화번호로 검색",
+    "appliances": "등록 가전",
+    "workHistory": "작업 이력"
+  },
+  "appliance": {
+    "title": "가전 관리",
+    "add": "가전 추가",
+    "edit": "가전 수정",
+    "brand": "브랜드",
+    "modelName": "모델명",
+    "applianceType": "종류",
+    "installDate": "설치일",
+    "serialNumber": "시리얼 번호",
+    "types": {
+      "aircon": "에어컨",
+      "refrigerator": "냉장고",
+      "washer": "세탁기",
+      "dryer": "건조기",
+      "dishwasher": "식기세척기",
+      "boiler": "보일러",
+      "other": "기타"
+    }
+  },
+  "workLog": {
+    "title": "작업 일지",
+    "add": "작업 추가",
+    "edit": "작업 수정",
+    "workType": "작업 유형",
+    "workedAt": "작업일",
+    "types": {
+      "cleaning": "세척",
+      "repair": "수리",
+      "inspection": "점검",
+      "installation": "설치",
+      "other": "기타"
+    },
+    "financials": "매출/비용",
+    "addRevenue": "매출 추가",
+    "addCost": "비용 추가",
+    "revenue": "매출",
+    "cost": "비용",
+    "profit": "이익",
+    "amount": "금액",
+    "description": "항목"
+  },
+  "calendar": {
+    "title": "캘린더",
+    "addAppointment": "예약 추가",
+    "status": {
+      "pending": "대기",
+      "confirmed": "확정",
+      "completed": "완료",
+      "cancelled": "취소"
+    }
+  },
+  "revenue": {
+    "title": "매출 관리",
+    "totalRevenue": "총 매출",
+    "totalCost": "총 비용",
+    "totalProfit": "순이익",
+    "thisMonth": "이번 달",
+    "lastMonth": "지난 달",
+    "last3Months": "최근 3개월"
+  },
+  "auth": {
+    "login": "로그인",
+    "logout": "로그아웃",
+    "signup": "회원가입",
+    "email": "이메일",
+    "password": "비밀번호",
+    "forgotPassword": "비밀번호 찾기",
+    "loginWithGoogle": "Google로 로그인"
+  },
+  "tier": {
+    "free": "무료",
+    "pro": "PRO",
+    "limitReached": "무료 플랜 한도 초과",
+    "upgradeToPro": "PRO로 업그레이드",
+    "customerLimit": "고객 최대 30명",
+    "applianceLimit": "가전 최대 50개"
+  },
+  "errors": {
+    "required": "필수 입력 항목입니다",
+    "invalidEmail": "올바른 이메일 형식이 아닙니다",
+    "minLength": "{{min}}자 이상 입력해주세요",
+    "maxLength": "{{max}}자 이하로 입력해주세요",
+    "networkError": "네트워크 오류가 발생했습니다",
+    "unknownError": "알 수 없는 오류가 발생했습니다"
+  }
+}
