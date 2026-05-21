@@ -1,7 +1,8 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Zap } from 'lucide-react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -84,9 +85,13 @@ export function SettingsClient() {
               고객 최대 30명 · 로컬 저장
             </span>
           </div>
-          <button className="text-sm text-blue-600 hover:underline">
+          <Link
+            href="/upgrade"
+            className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline font-medium"
+          >
+            <Zap size={13} />
             {t('tier.upgradeToPro')} →
-          </button>
+          </Link>
         </Card>
 
         <Card className="p-4 space-y-2">

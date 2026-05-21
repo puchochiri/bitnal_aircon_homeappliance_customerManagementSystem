@@ -9,6 +9,7 @@ import {
   createWorkLog,
   deleteWorkLog,
   getRevenueSummary,
+  getMonthlyRevenue,
   type CreateWorkLogInput,
 } from '@/lib/workLogs'
 
@@ -42,6 +43,14 @@ export function useRevenueSummary(userId: string, from: string, to: string) {
   return useQuery({
     queryKey: ['revenue-summary', userId, from, to],
     queryFn: () => getRevenueSummary(userId, from, to),
+    enabled: !!userId,
+  })
+}
+
+export function useMonthlyRevenue(userId: string, months = 6) {
+  return useQuery({
+    queryKey: ['monthly-revenue', userId, months],
+    queryFn: () => getMonthlyRevenue(userId, months),
     enabled: !!userId,
   })
 }

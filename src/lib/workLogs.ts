@@ -96,6 +96,13 @@ export interface RevenueSummary {
   totalProfit: number
 }
 
+export interface MonthlyRevenue {
+  month: string
+  revenue: number
+  cost: number
+  profit: number
+}
+
 export async function getRevenueSummary(
   userId: string,
   fromDate: string,
@@ -121,4 +128,42 @@ export async function getRevenueSummary(
     .reduce((sum, f) => sum + f.amount, 0)
 
   return { totalRevenue, totalCost, totalProfit: totalRevenue - totalCost }
+}
+
+export async function getMonthlyRevenue(
+  userId: string,
+  months = 6
+): Promise<MonthlyRevenue[]> {
+  const db = getDB()
+  const now = new Date()
+  const result: MonthlyRevenue[] = []
+
+  for (let i = months - 1; i >= 0; i--) {
+    const y = now.getFullYear()
+    const m = now.getMonth() - i
+    const from = new Date(y, m, 1).toISOString().slice(0, 10)
+    const to = new Date(y, m + 1, 0).toISOString().slice(0, 10)
+
+    const logs = await db.workLogs
+      .filter((w) => w.user_id === userId && w.worked_at >= from && w.worked_at <= to)
+      .toArray()
+
+    const logIds = logs.map((l) => l.id)
+    const financials = logIds.length
+      ? await db.workFinancials.filter((f) => logIds.includes(f.work_log_id)).toArray()
+      : []
+
+    const revenue = financials
+      .filter((f) => f.type === 'revenue')
+      .reduce((s, f) => s + f.amount, 0)
+    const cost = financials
+      .filter((f) => f.type === 'cost')
+      .reduce((s, f) => s + f.amount, 0)
+
+    const d = new Date(y, m, 1)
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    result.push({ month, revenue, cost, profit: revenue - cost })
+  }
+
+  return result
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -15,6 +15,8 @@ import { CustomerCard } from '@/components/customers/CustomerCard'
 import { CustomerForm, type CustomerFormValues } from '@/components/customers/CustomerForm'
 import { useCustomers, useCreateCustomer } from '@/hooks/useCustomers'
 import { Header } from '@/components/layout/Header'
+import { exportCustomersCSV } from '@/lib/csv'
+import { toast } from 'sonner'
 
 const DEMO_USER_ID = 'local-user'
 const FREE_LIMIT = 30
@@ -37,6 +39,15 @@ export function CustomerListClient() {
 
   const isAtLimit = customers.length >= FREE_LIMIT
 
+  async function handleExport() {
+    try {
+      await exportCustomersCSV(DEMO_USER_ID)
+      toast.success('CSV 파일이 다운로드되었습니다')
+    } catch {
+      toast.error('내보내기에 실패했습니다')
+    }
+  }
+
   function handleSubmit(values: CustomerFormValues) {
     createCustomer(
       { ...values, user_id: DEMO_USER_ID },
@@ -46,7 +57,15 @@ export function CustomerListClient() {
 
   return (
     <>
-      <Header title={t('customer.title')} />
+      <Header
+        title={t('customer.title')}
+        right={
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={customers.length === 0}>
+            <Download size={14} className="mr-1" />
+            CSV
+          </Button>
+        }
+      />
       <div className="p-4 space-y-4">
         <div className="flex gap-2">
           <div className="relative flex-1">

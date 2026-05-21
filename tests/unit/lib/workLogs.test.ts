@@ -32,7 +32,7 @@ vi.mock('@/db/dexie', () => {
   }
 })
 
-import { createWorkLog, deleteWorkLog, getRevenueSummary } from '@/lib/workLogs'
+import { createWorkLog, deleteWorkLog, getRevenueSummary, getMonthlyRevenue } from '@/lib/workLogs'
 
 describe('workLogs lib', () => {
   beforeEach(() => {
@@ -83,5 +83,19 @@ describe('workLogs lib', () => {
     expect(summary.totalRevenue).toBe(80000)
     expect(summary.totalCost).toBe(20000)
     expect(summary.totalProfit).toBe(60000)
+  })
+
+  it('returns 6 months of data with correct structure', async () => {
+    // Act
+    const monthly = await getMonthlyRevenue('user-1', 6)
+
+    // Assert
+    expect(monthly).toHaveLength(6)
+    monthly.forEach((entry) => {
+      expect(entry.month).toMatch(/^\d{4}-\d{2}$/)
+      expect(typeof entry.revenue).toBe('number')
+      expect(typeof entry.cost).toBe('number')
+      expect(entry.profit).toBe(entry.revenue - entry.cost)
+    })
   })
 })
